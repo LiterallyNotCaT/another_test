@@ -17,53 +17,30 @@ export const PASSWORDS: Record<string, string> = {
   web1: 'web1',
   web4: 'web4',
   web5: 'web5',
-  // web3 passwords per house: 'Baan 1' .. 'Baan 12'
 }
 export const getBaanPassword = (baan: number) => `Baan ${baan}`
 
-// Areas
+// Areas (For Map)
 export const AREAS = {
   A: ['A1','A2','A3','A4','A5'],
   B: ['B1','B2','B3','B4','B5','B6'],
   C: ['C1','C2','C3','C4','C5','C6','C7','C8','C9'],
 }
+// แผนที่รวม 20 ช่อง
 export const ALL_AREAS = [...AREAS.A, ...AREAS.B, ...AREAS.C]
 
-// Income rates
-export const INCOME_RATE: Record<string, number> = { A: 1.8, B: 1.6, C: 1.4 }
-// Disaster-ed loss rate
-export const DISASTER_RATE: Record<string, number> = { A: 0.9, B: 0.8, C: 0.7 }
-
 // Disasters
-export type DisasterType = '🌊 น้ำท่วม' | '🌋 แผ่นดินไหว' | '🔥 ไฟป่า' | '🌪️ พายุ' | '☀️ แล้ง'
-export const DISASTERS: DisasterType[] = ['🌊 น้ำท่วม', '🌋 แผ่นดินไหว', '🔥 ไฟป่า', '🌪️ พายุ', '☀️ แล้ง']
-export const DISASTER_KEYS = ['น้ำท่วม', 'แผ่นดินไหว', 'ไฟป่า', 'พายุ', 'แล้ง']
-
-// Disaster affected areas (from RULEBOOK sheet)
-// disaster number -> affected area cells per group
-export const DISASTER_AREAS: Record<number, { A: number[], B: number[], C: number[] }> = {
-  1: { A: [1],     B: [1,2],   C: [1] },
-  2: { A: [2],     B: [2,3],   C: [2] },
-  3: { A: [3],     B: [3,4],   C: [3] },
-  4: { A: [4],     B: [4,5],   C: [4] },
-  5: { A: [5],     B: [5,6],   C: [5] },
-  6: { A: [],      B: [6,1],   C: [6,7,8] },
-  7: { A: [],      B: [],      C: [1,2,3,4,5,6] },
-  8: { A: [],      B: [1,2,3], C: [] },
-  9: { A: [1,2],   B: [],      C: [] },
+export const DISASTER_AREAS: Record<number, Record<string, number[]>> = {
+  1: { A: [1,2,3], B: [1,2], C: [] },
+  2: { A: [4,5], B: [3,4], C: [1,2,3] },
+  3: { A: [], B: [5,6], C: [4,5,6] },
+  4: { A: [1,5], B: [1,6], C: [7,8,9] },
+  5: { A: [2,3], B: [2,3], C: [8,9] },
 }
 
-// Rank rewards
-export const RANK_REWARDS: Record<number, number> = {
-  1: 4.0, 2: 2.5, 3: 2.0, 4: 1.5, 5: 1.5,
-  6: 1.0, 7: 0.75, 8: 0.75, 9: 0.75, 10: 0.75,
-  11: 0.5, 12: 0.5,
-}
-
-export const TOTAL_WAVES = 5
 export const HOUSES = Array.from({ length: 12 }, (_, i) => i + 1)
 
-// Types
+// --- Types ---
 export interface BiddingEntry {
   area: string
   amount: number
@@ -81,48 +58,21 @@ export interface WaveSubmission {
   balance: number
 }
 
-export interface HouseData {
-  baan: number
-  balance: number
-  wave: number
-  areas: string[]  // currently owned
-  history: WaveHistory[]
-}
-
-export interface WaveHistory {
-  wave: number
-  spent: number
-  won: string[]
-  lost: string[]
-  income: number
-  disaster?: number
-  endBalance: number
-}
-
-export interface GameState {
-  currentWave: number
-  isOpen: boolean       // submissions open/closed
-  timerEnd: string | null  // ISO timestamp
-  duration: number      // minutes per wave
-  gameMode?: 'bid' | 'bet'
-}
-
-export interface LeaderboardEntry {
-  baan: number
-  score: number
-  rank: number
-  wave: number
+// 🚨 เพิ่ม Type ของ Scoreboard เพื่อแก้ Error: Property 'entries' does not exist
+export interface ScoreEntry {
+  baan: number;
+  score: number;
+  extra?: Record<string, string | number>;
 }
 
 // House color palette
 export const HOUSE_COLORS: Record<number, string> = {
   1:  '#ef4444', 2:  '#f97316', 3:  '#eab308', 4:  '#22c55e',
-  5:  '#3b82f6', 6:  '#8b5cf6', 7:  '#ec4899', 8:  '#06b6d4',
-  9:  '#f59e0b', 10: '#10b981', 11: '#6366f1', 12: '#e11d48',
+  5:  '#3b82f6', 6:  '#8b5cf6', 7:  '#d946ef', 8:  '#f43f5e',
+  9:  '#06b6d4', 10: '#14b8a6', 11: '#6366f1', 12: '#64748b'
 }
-
 export const HOUSE_NAMES: Record<number, string> = {
-  1: 'บ้านที่ 1', 2: 'บ้านที่ 2', 3: 'บ้านที่ 3', 4: 'บ้านที่ 4',
-  5: 'บ้านที่ 5', 6: 'บ้านที่ 6', 7: 'บ้านที่ 7', 8: 'บ้านที่ 8',
-  9: 'บ้านที่ 9', 10: 'บ้านที่ 10', 11: 'บ้านที่ 11', 12: 'บ้านที่ 12',
+  1: 'บ้าน 1', 2: 'บ้าน 2', 3: 'บ้าน 3', 4: 'บ้าน 4',
+  5: 'บ้าน 5', 6: 'บ้าน 6', 7: 'บ้าน 7', 8: 'บ้าน 8',
+  9: 'บ้าน 9', 10:'บ้าน 10',11:'บ้าน 11',12:'บ้าน 12'
 }
