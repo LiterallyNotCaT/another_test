@@ -10,15 +10,15 @@ import Timer from '@/components/Timer'
 import clsx from 'clsx'
 import {
   RefreshCw, ChevronLeft, ChevronRight, Play, Square,
-  Zap, RotateCcw, Map, History, Trophy,
+  Zap, Map, History, Trophy,
   LayoutDashboard, CheckCircle2, Clock, ExternalLink,
 } from 'lucide-react'
 import { HOUSE_COLORS, HOUSE_NAMES, SHEET_BASE, TOTAL_WAVES } from '@/lib/constants'
 import { AFTERNOON_SCORE_CSV_URL } from '@/lib/scoreboardSources'
 import { fetchWaveInputs, type WaveInputRow } from '@/lib/sheets'
 import {
-  getGameState, setGameState, getMapOwnership, setMapOwnership,
-  getActiveDisasterForWave, getSubmissions, getSubmissionsForWave, subscribeStore,
+  getGameState, setGameState, getMapOwnership,
+  getActiveDisasterForWave, getSubmissions, getSubmissionsForWave, subscribeStore, syncGameStateFromSheet,
 } from '@/lib/store'
 
 function AdminContent() {
@@ -26,6 +26,8 @@ function AdminContent() {
   const [ownership,   setOwnership]   = useState(getMapOwnership)
   const [tab,         setTab]         = useState<'dashboard'|'map'|'history'|'ownership'|'leaderboard'>('dashboard')
   const [mapWave,     setMapWave]     = useState(getGameState().currentWave)
+  const [submissionWave, setSubmissionWave] = useState(getGameState().currentWave)
+  const [submissionGame, setSubmissionGame] = useState<'bid'|'bet'>(getGameState().gameMode === 'bet' ? 'bet' : 'bid')
   const [sheetInputs, setSheetInputs] = useState<Record<number, WaveInputRow[]>>({})
   const [savePulses,  setSavePulses]  = useState<Record<number, { count: number; at: number }>>({})
   const [nowTick,     setNowTick]     = useState(Date.now())
@@ -33,6 +35,7 @@ function AdminContent() {
   const [toast,       setToast]       = useState<{msg:string;type:'ok'|'warn'|'err'}>()
   const [duration,    setDuration]    = useState('10')
   const [processing,  setProcessing]  = useState(false)
+  const [isLoaded,    setIsLoaded]    = useState(false)
   const submissionSnapshotRef = useRef<Record<string, number>>({})
   const sheetOwnership = useWaveOwnership(mapWave)
 
@@ -43,6 +46,16 @@ function AdminContent() {
   const applyGS = (patch: Parameters<typeof setGameState>[0]) => {
     setGameState(patch); setGS(getGameState())
   }
+
+  useEffect(() => {
+    const localState = getGameState()
+    setGS(localState)
+    setOwnership(getMapOwnership())
+    setMapWave(localState.currentWave)
+    setSubmissionWave(localState.currentWave)
+    setSubmissionGame(localState.gameMode === 'bet' ? 'bet' : 'bid')
+    setIsLoaded(true)
+  }, [])
 
   // ── Fetch all sheet scores ──────────────────────────────
   const fetchAll = useCallback(async () => {
@@ -62,7 +75,19 @@ function AdminContent() {
     return()=>{ window.clearTimeout(first); clearInterval(t) }
   },[fetchAll])
 
+  useEffect(() => {
+    if (!isLoaded) return
+    const sync = async () => {
+      const remote = await syncGameStateFromSheet()
+      if (remote) setGS(remote)
+    }
+    const first = window.setTimeout(sync, 0)
+    const t = window.setInterval(sync, 8000)
+    return () => { window.clearTimeout(first); window.clearInterval(t) }
+  }, [isLoaded])
+
   useEffect(()=>{
+    if (!isLoaded) return
     const u=subscribeStore((key)=>{
       const nextState = getGameState()
       setGS(nextState)
@@ -93,7 +118,7 @@ function AdminContent() {
       }
     })
     return u
-  },[])
+  },[isLoaded])
 
   useEffect(() => {
     submissionSnapshotRef.current = Object.fromEntries(
@@ -108,7 +133,9 @@ function AdminContent() {
 
   useEffect(() => {
     setMapWave(gs.currentWave)
-  }, [gs.currentWave])
+    setSubmissionWave(gs.currentWave)
+    setSubmissionGame(gs.gameMode === 'bet' ? 'bet' : 'bid')
+  }, [gs.currentWave, gs.gameMode])
 
   useEffect(() => {
     if (!gs.isOpen || !gs.timerEnd) return
@@ -140,16 +167,11 @@ function AdminContent() {
     notify(`${gs.gameMode === 'bet' ? 'Bet' : 'Bid'} Wave ${gs.currentWave} refreshed from Google Sheet`)
     setProcessing(false)
   }
-  const resetMap = () => {
-    if (!confirm('รีเซ็ต Map ทั้งหมด?')) return
-    setMapOwnership({}); setOwnership({}); notify('🗺 Reset Map แล้ว')
-  }
-
-  const currentGame = gs.gameMode === 'bet' ? 'bet' : 'bid'
-  const hasSubmittedCurrentGame = (row: WaveInputRow) => currentGame === 'bet' ? row.hasBetInput : row.hasBidInput
-  const sheetSubmittedBaans = (sheetInputs[gs.currentWave] ?? []).filter(hasSubmittedCurrentGame).map(r=>r.baan)
+  const hasSubmittedForGame = (row: WaveInputRow, game: 'bid'|'bet') => game === 'bet' ? row.hasBetInput : row.hasBidInput
+  const viewedSubmissionRows = sheetInputs[submissionWave] ?? []
+  const sheetSubmittedBaans = viewedSubmissionRows.filter(row => hasSubmittedForGame(row, submissionGame)).map(r=>r.baan)
   const submittedBaans = Array.from(new Set(sheetSubmittedBaans))
-  const localSubmissionsCurrent = getSubmissionsForWave(gs.currentWave)
+  const localSubmissionsCurrent = getSubmissionsForWave(submissionWave)
 
   // ── Toast color ─────────────────────────────────────────
   const toastStyle = toast?.type==='err'
@@ -157,6 +179,14 @@ function AdminContent() {
     : toast?.type==='warn'
     ? 'border-yellow-500/30 bg-yellow-950/60'
     : 'border-emerald-500/30 bg-emerald-950/60'
+
+  if (!isLoaded) return (
+    <div className="wire-page-full">
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="h-9 w-9 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
+      </div>
+    </div>
+  )
 
   return (
     <div className="wire-page-full">
@@ -200,19 +230,37 @@ function AdminContent() {
                   <div className="wire-panel colorful-box colorful-box-blue bg-white p-5 admin-submission-panel">
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <p className="text-label">Wave {gs.currentWave} submissions</p>
+                        <p className="text-label">Wave {submissionWave} submissions</p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="badge badge-blue">{currentGame === 'bet' ? 'Bet game' : 'Bid game'} - Google Sheet</span>
+                        <span className="badge badge-blue">{submissionGame === 'bet' ? 'Bet game' : 'Bid game'} - Google Sheet</span>
                         <button onClick={fetchAll} className="btn btn-ghost py-1.5 px-2 text-xs">
                           <RefreshCw size={12} /> Refresh
                         </button>
                       </div>
                     </div>
+                    <div className="admin-submission-wave-filter flex flex-wrap gap-2">
+                      {Array.from({length:TOTAL_WAVES},(_,i)=>i+1).map(w=>(
+                        <button key={w} onClick={()=>setSubmissionWave(w)}
+                          className={clsx('btn px-3', submissionWave===w ? 'btn-primary' : 'btn-ghost')}>
+                          W{w}
+                        </button>
+                      ))}
+                      <div className="admin-submission-game-filter flex gap-2">
+                        <button onClick={()=>setSubmissionGame('bid')}
+                          className={clsx('btn px-3', submissionGame==='bid' ? 'btn-primary' : 'btn-ghost')}>
+                          Bid
+                        </button>
+                        <button onClick={()=>setSubmissionGame('bet')}
+                          className={clsx('btn px-3', submissionGame==='bet' ? 'btn-primary' : 'btn-ghost')}>
+                          Bet
+                        </button>
+                      </div>
+                    </div>
                     <div className="admin-submission-grid grid grid-cols-1 gap-2 xl:grid-cols-2">
                       {Array.from({length:12},(_,i)=>i+1).map(b=>{
-                        const row = (sheetInputs[gs.currentWave] ?? []).find(r=>r.baan===b)
-                        const done = row ? hasSubmittedCurrentGame(row) : false
+                        const row = viewedSubmissionRows.find(r=>r.baan===b)
+                        const done = row ? hasSubmittedForGame(row, submissionGame) : false
                         const localSub = localSubmissionsCurrent.find(s => s.baan === b)
                         const pulse = savePulses[b]
                         const saving = Boolean(pulse && nowTick - pulse.at < 5000)
@@ -231,7 +279,7 @@ function AdminContent() {
                               </div>
                             </div>
                             <span className={clsx('badge shrink-0', saving ? 'badge-blue' : done ? 'badge-green' : 'badge-red')}>
-                              {saving ? 'Saving' : done ? 'submitted' : 'no data'}
+                              {saving ? 'Saving' : done ? 'Saved' : 'no data'}
                             </span>
                             {done ? <CheckCircle2 className="shrink-0 text-green-500" size={18}/> : <Clock className="shrink-0 text-amber-500" size={18}/>} 
                           </div>
@@ -239,7 +287,7 @@ function AdminContent() {
                       })}
                     </div>
                     <div className="admin-submission-summary mt-4 grid grid-cols-2 gap-2 text-xs">
-                      <div className="rounded bg-green-50 px-3 py-2 text-green-700">Sent: {submittedBaans.length}/12</div>
+                      <div className="rounded bg-green-50 px-3 py-2 text-green-700">Saved: {submittedBaans.length}/12</div>
                       <div className="rounded bg-amber-50 px-3 py-2 text-amber-700">Waiting: {12-submittedBaans.length}</div>
                     </div>
                   </div>
@@ -329,9 +377,6 @@ function AdminContent() {
                 </div>
                 <button onClick={processWave} disabled={processing} className="btn btn-primary w-full">
                   <Zap size={15}/> Refresh Sheet Wave {gs.currentWave}
-                </button>
-                <button onClick={resetMap} className="btn btn-ghost w-full">
-                  <RotateCcw size={14}/> Reset Map
                 </button>
               </div>
               </div>

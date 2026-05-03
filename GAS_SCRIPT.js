@@ -5,6 +5,7 @@
 // ============================================================
 
 const SHEET_ID = '1FKv1l9zpF85V_oUKQCjAjYyb4DZcMRCvN671DzU_Dq4'
+const STATE_SHEET = 'GAME_STATE'
 const WAVE_GIDS = {
   1: 1448591830,
 }
@@ -44,6 +45,9 @@ function doPost(e) {
     if (payload.action === 'writeWave') {
       const result = handleWriteWave(payload)
       output.setContent(JSON.stringify(result))
+    } else if (payload.action === 'writeGameState') {
+      const result = handleWriteGameState(payload.state || {})
+      output.setContent(JSON.stringify(result))
     } else {
       output.setContent(JSON.stringify({ status: 'error', message: 'Unknown action' }))
     }
@@ -65,6 +69,31 @@ function doGet(e) {
       sheets: ss.getSheets().map(s => ({ name: s.getName(), gid: s.getSheetId() })),
     }))
     .setMimeType(ContentService.MimeType.JSON)
+}
+
+function handleWriteGameState(state) {
+  const wave = Number(state.currentWave)
+  const duration = Number(state.duration || 10)
+  if (!wave || wave < 1 || wave > 5) return { status: 'error', message: 'Invalid currentWave' }
+
+  const ss = SpreadsheetApp.openById(SHEET_ID)
+  let sheet = ss.getSheetByName(STATE_SHEET)
+  if (!sheet) {
+    sheet = ss.insertSheet(STATE_SHEET)
+    sheet.hideSheet()
+  }
+
+  const rows = [
+    ['currentWave', wave],
+    ['isOpen', state.isOpen === true ? 'true' : 'false'],
+    ['timerEnd', state.timerEnd || ''],
+    ['duration', duration],
+    ['gameMode', state.gameMode === 'bet' ? 'bet' : 'bid'],
+    ['updatedAt', state.updatedAt || new Date().toISOString()],
+  ]
+  sheet.getRange(1, 1, rows.length, 2).setValues(rows)
+  SpreadsheetApp.flush()
+  return { status: 'ok', state: Object.fromEntries(rows) }
 }
 
 // ── Write one house's wave data ────────────────────────────

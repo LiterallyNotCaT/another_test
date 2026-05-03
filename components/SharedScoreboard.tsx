@@ -87,6 +87,8 @@ const parseCSVData = (csvText: string) => {
   return scores;
 };
 
+const freshUrl = (url: string) => `${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}`;
+
 // --- 2. THE MAIN COMPONENT ---
 export default function SharedScoreboard({ 
   title, 
@@ -116,7 +118,7 @@ export default function SharedScoreboard({
     if (manual) setIsRefreshing(true);
     try {
       if (csvUrlTotal) {
-        const resTotal = await fetch(csvUrlTotal, { cache: 'no-store' });
+        const resTotal = await fetch(freshUrl(csvUrlTotal), { cache: 'no-store' });
         const dataTotal = parseCSVData(await resTotal.text());
         setHouses(prevHouses => 
           prevHouses.map(house => {
@@ -126,8 +128,8 @@ export default function SharedScoreboard({
         );
       } else if (csvUrlLower && csvUrlUpper) {
         const [resLower, resUpper] = await Promise.all([
-          fetch(csvUrlLower, { cache: 'no-store' }),
-          fetch(csvUrlUpper, { cache: 'no-store' })
+          fetch(freshUrl(csvUrlLower), { cache: 'no-store' }),
+          fetch(freshUrl(csvUrlUpper), { cache: 'no-store' })
         ]);
         const dataLower = parseCSVData(await resLower.text());
         const dataUpper = parseCSVData(await resUpper.text());
@@ -185,7 +187,7 @@ export default function SharedScoreboard({
           type="button"
           onClick={() => fetchData(true)}
           disabled={isRefreshing}
-          className={`shared-scoreboard-clock home-button flex items-center gap-3 bg-white/10 backdrop-blur-sm px-4 py-2.5 rounded-xl border border-white/20 ${isRefreshing ? 'opacity-75 cursor-wait' : 'hover:bg-white/15 active:scale-[0.98]'}`}
+          className={`shared-scoreboard-clock shared-scoreboard-refresh-button flex items-center gap-3 bg-white/10 backdrop-blur-sm px-4 py-2.5 rounded-xl border border-white/20 ${isRefreshing ? 'opacity-75 cursor-wait' : 'hover:bg-white/15 active:scale-[0.98]'}`}
         >
           <div className="flex flex-col items-end">
             <span className="text-[10px] lg:text-xs text-white/80 uppercase font-bold tracking-wider flex items-center gap-1">

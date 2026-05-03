@@ -11,7 +11,7 @@ import clsx from 'clsx'
 import { Map, History, Trophy } from 'lucide-react'
 import { TOTAL_WAVES } from '@/lib/constants'
 import { AFTERNOON_SCORE_CSV_URL } from '@/lib/scoreboardSources'
-import { getGameState, subscribeStore, getActiveDisasterForWave } from '@/lib/store'
+import { getGameState, subscribeStore, getActiveDisasterForWave, syncGameStateFromSheet } from '@/lib/store'
 
 const DISASTER_IDS = Array.from({ length: 9 }, (_, i) => i + 1)
 
@@ -20,12 +20,35 @@ function AmbassadorContent() {
   const [selWave,     setSelWave]     = useState(1)
   const [filterDis,   setFilterDis]   = useState<number|null>(null)
   const [gs,          setGS]          = useState(getGameState)
+  const [isLoaded,    setIsLoaded]    = useState(false)
   const sheetOwnership = useWaveOwnership(selWave)
-  useEffect(()=>{
-    const unsub = subscribeStore(()=>{ setGS(getGameState()) })
-    const poll  = setInterval(()=>{ setGS(getGameState()) }, 3000)
-    return ()=>{ unsub(); clearInterval(poll) }
+
+  useEffect(() => {
+    const localState = getGameState()
+    setGS(localState)
+    setSelWave(localState.currentWave)
+    setIsLoaded(true)
   }, [])
+
+  useEffect(()=>{
+    if (!isLoaded) return
+    const unsub = subscribeStore(()=>{ setGS(getGameState()) })
+    const sync = async () => {
+      const remote = await syncGameStateFromSheet()
+      setGS(remote ?? getGameState())
+    }
+    const poll  = setInterval(sync, 3000)
+    void sync()
+    return ()=>{ unsub(); clearInterval(poll) }
+  }, [isLoaded])
+
+  if (!isLoaded) return (
+    <div className="wire-page-full ambassador-fullscreen">
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="h-9 w-9 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
+      </div>
+    </div>
+  )
 
   return (
     <div className="wire-page-full ambassador-fullscreen">

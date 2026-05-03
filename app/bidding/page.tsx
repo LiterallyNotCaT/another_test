@@ -11,7 +11,7 @@ import { LogOut, PanelRight, Sparkles } from 'lucide-react'
 import { HOUSE_NAMES, SHEET_ID, getBaanPassword, getWaveSheetQuery } from '@/lib/constants'
 import {
   getGameState, getMapOwnership, saveSubmission, getSubmissionsForBaan,
-  subscribeStore, getActiveDisasterForWave,
+  subscribeStore, getActiveDisasterForWave, syncGameStateFromSheet,
 } from '@/lib/store'
 import { fetchWaveInfo, writeToSheet } from '@/lib/sheets'
 
@@ -95,6 +95,7 @@ function BiddingGame({ baan }: { baan:number }) {
   const [betTarget, setBetTarget] = useState('')
   const [betAmount, setBetAmount] = useState('')
   const [sheetBetSpend, setSheetBetSpend] = useState(0)
+  const [isLoaded, setIsLoaded] = useState(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const totalBet = cart.reduce((s,i)=>s+i.amount,0)
   const islandCart = cart.filter(i => i.area !== 'KING')
@@ -105,8 +106,14 @@ function BiddingGame({ baan }: { baan:number }) {
   const currentSubmission = getSubmissionsForBaan(baan).find(s => s.wave === gs.currentWave)
   const priorBetSpend = !isBetMode ? sheetBetSpend || currentSubmission?.betAmount || 0 : 0
   const effectiveBalance = Math.max(0, balance - priorBetSpend)
-  const canUseKingControls = isKing || currentKing === baan
+  const canChooseKingDisaster = isKing || currentKing === baan
   const sheetOwnership = useWaveOwnership(gs.currentWave)
+
+  useEffect(() => {
+    setGS(getGameState())
+    setOwnership(getMapOwnership())
+    setIsLoaded(true)
+  }, [])
 
   /* fetch balance from Wave sheet */
   const fetchBalance = useCallback(async()=>{
@@ -143,15 +150,21 @@ function BiddingGame({ baan }: { baan:number }) {
 
   /* subscribe store */
   useEffect(()=>{
+    if (!isLoaded) return
     const u=subscribeStore(()=>{ setGS(getGameState()); setOwnership(getMapOwnership()) })
-    const p=setInterval(()=>{ setGS(getGameState()); setOwnership(getMapOwnership()) },3000)
+    const sync = async () => {
+      const remote = await syncGameStateFromSheet()
+      setGS(remote ?? getGameState())
+      setOwnership(getMapOwnership())
+    }
+    const p=setInterval(sync,3000)
+    void sync()
     return()=>{ u(); clearInterval(p) }
-  },[])
+  },[isLoaded])
 
   /* map select */
   const handleSelect = (area:string)=>{
     if(!gs.isOpen) return
-    if(area === 'KING' && currentKing !== null && currentKing !== baan && !isKing) return
     const alreadySelected = cart.some(i=>i.area===area)
     if (!alreadySelected && area !== 'KING' && islandCart.length >= 3) return
     setCart(prev=>prev.find(i=>i.area===area)?prev.filter(i=>i.area!==area):[...prev,{area,amount:effectiveBalance >= 100 ? 100 : 0}])
@@ -162,16 +175,15 @@ function BiddingGame({ baan }: { baan:number }) {
   const handleSave = useCallback(async ()=>{
     const hasInvalidBidAmount = cart.some(i => i.amount <= 0)
     if(isBetMode && (betSpend < 500 || betSpend > balance)) return
-    if(!isBetMode && (hasInvalidBidAmount || (totalBet <= 0 && !(canUseKingControls && kingDis)) || totalBet > effectiveBalance)) return
-    if(!isBetMode && canUseKingControls && kingBidAmount > 0 && !kingDis) return
+    if(!isBetMode && (hasInvalidBidAmount || (totalBet <= 0 && !(canChooseKingDisaster && kingDis)) || totalBet > effectiveBalance)) return
 
     // 1. Save locally (instant, always works)
     saveSubmission({
       baan,
       wave: gs.currentWave,
       bets: isBetMode ? currentSubmission?.bets ?? [] : cart,
-      isKing: canUseKingControls,
-      kingDisaster: kingDis ?? undefined,
+      isKing: canChooseKingDisaster,
+      kingDisaster: canChooseKingDisaster ? kingDis ?? undefined : undefined,
       betTarget: isBetMode && betTarget ? parseInt(betTarget) : currentSubmission?.betTarget,
       betAmount: isBetMode ? betSpend : currentSubmission?.betAmount,
       timestamp: new Date().toLocaleTimeString('th-TH'),
@@ -189,9 +201,8 @@ function BiddingGame({ baan }: { baan:number }) {
       baan,
       betTarget: isBetMode && betTarget ? parseInt(betTarget) : undefined,
       betAmount: isBetMode ? betSpend : undefined,
-      // King bid = king's total bet amount across all areas
-      kingAmount: !isBetMode && canUseKingControls && kingBid ? kingBidAmount : undefined,
-      kingDisaster: canUseKingControls ? kingDis : undefined,
+      kingAmount: !isBetMode && kingBid ? kingBidAmount : undefined,
+      kingDisaster: canChooseKingDisaster ? kingDis : undefined,
       islands: isBetMode ? undefined : islands,
     }).then(res => {
       setSaveMessage(res.ok ? 'Sent to admin' : `Admin sync error: ${res.message ?? 'not sent'}`)
@@ -201,7 +212,7 @@ function BiddingGame({ baan }: { baan:number }) {
       setSaveMessage('Admin sync error')
       console.error(e)
     })
-  },[baan,cart,gs.currentWave,canUseKingControls,kingDis,balance,totalBet,isBetMode,betTarget,betSpend,fetchBalance,effectiveBalance,currentSubmission,islandCart,kingBid,kingBidAmount])
+  },[baan,cart,gs.currentWave,canChooseKingDisaster,kingDis,balance,totalBet,isBetMode,betTarget,betSpend,fetchBalance,effectiveBalance,currentSubmission,islandCart,kingBid,kingBidAmount])
 
   /* autosave */
   useEffect(()=>{
@@ -211,6 +222,14 @@ function BiddingGame({ baan }: { baan:number }) {
     return()=>clearTimeout(saveTimer.current)
   },[cart,kingDis]) // eslint-disable-line
 
+  if (!isLoaded) return (
+    <div className="wire-page-full">
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="h-9 w-9 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
+      </div>
+    </div>
+  )
+
   return (
     <div className="wire-page-full">
       <header className="wire-topbar">
@@ -218,7 +237,7 @@ function BiddingGame({ baan }: { baan:number }) {
           <HomeButton className="bg-white/10 border-white/20 text-white hover:text-white" />
           <div className="wire-title">ลงทุนเกาะรอบที่ {gs.currentWave}</div>
           <div className="wire-title flex items-center gap-3">
-            {canUseKingControls && <Sparkles size={24} className="text-yellow-200" />}
+            {canChooseKingDisaster && <Sparkles size={24} className="text-yellow-200" />}
             {HOUSE_NAMES[baan]}
           </div>
         </div>
@@ -330,7 +349,7 @@ function BiddingGame({ baan }: { baan:number }) {
             {panelOpen && !isBetMode && (
               <aside className="wire-panel wire-side-panel">
                 <div className="wire-section-title">พื้นที่ที่เลือก</div>
-                <BiddingCart baan={baan} balance={effectiveBalance} items={cart} isKing={canUseKingControls}
+                <BiddingCart baan={baan} balance={effectiveBalance} items={cart} isKing={canChooseKingDisaster}
                   kingDisaster={kingDis}
                   onUpdate={i=>{setCart([...i.filter(x=>x.area !== 'KING').slice(0,3), ...i.filter(x=>x.area === 'KING').slice(0,1)]);setIsSaved(false)}}
                   onKingDisaster={d=>{setKingDis(d);setIsSaved(false)}}

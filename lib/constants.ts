@@ -106,6 +106,7 @@ export interface GameState {
   timerEnd: string | null  // ISO timestamp
   duration: number      // minutes per wave
   gameMode?: 'bid' | 'bet'
+  updatedAt?: string
 }
 
 export interface LeaderboardEntry {

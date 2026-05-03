@@ -29,7 +29,7 @@ const GAS_URL = process.env.NEXT_PUBLIC_GAS_URL ?? ''
 
 // ── GViz helper ────────────────────────────────────────────
 async function fetchGViz(sheet: string): Promise<any[][]> {
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheet)}`
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheet)}&t=${Date.now()}`
   try {
     const text = await (await fetch(url, { cache: 'no-store' })).text()
     const js = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/)?.[1]
@@ -45,7 +45,12 @@ async function fetchGViz(sheet: string): Promise<any[][]> {
 }
 
 async function fetchWaveGViz(wave: number): Promise<any[][]> {
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&${getWaveSheetQuery(wave)}`
+  return fetchWaveRangeGViz(wave)
+}
+
+async function fetchWaveRangeGViz(wave: number, range?: string): Promise<any[][]> {
+  const rangeQuery = range ? `&range=${encodeURIComponent(range)}` : ''
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&${getWaveSheetQuery(wave)}${rangeQuery}&t=${Date.now()}`
   try {
     const text = await (await fetch(url, { cache: 'no-store' })).text()
     const js = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/)?.[1]
@@ -55,7 +60,7 @@ async function fetchWaveGViz(wave: number): Promise<any[][]> {
       (r.c ?? []).map((cell: any) => (cell?.v != null ? String(cell.v) : ''))
     )
   } catch (e) {
-    console.error(`fetchWaveGViz(${wave}):`, e)
+    console.error(`fetchWaveGViz(${wave}${range ? `, ${range}` : ''}):`, e)
     return []
   }
 }
@@ -92,6 +97,7 @@ export async function fetchWaveBalances(wave: number) {
   // Data rows start at index 4 (row 5 in sheet = index 4 after 0-based GViz)
   // Filter rows where col A is a number 1-12
   return rows
+    .slice(4, 16)
     .filter(r => {
       const b = parseInt(r[0])
       return !isNaN(b) && b >= 1 && b <= 12
@@ -119,21 +125,28 @@ export interface WaveInputRow {
 }
 
 export async function fetchWaveInputs(wave: number): Promise<{ rows: WaveInputRow[]; kingDisaster: number | null }> {
-  const rows = await fetchWaveGViz(wave)
+  const rows = await fetchWaveRangeGViz(wave, 'A5:U16')
   const numberAt = (row: string[], idx: number) => parseFloat(String(row[idx] ?? 0)) || 0
   const textAt = (row: string[], idx: number) => String(row[idx] ?? '').trim()
   const isFilled = (value: string) => value !== '' && value !== '-'
+  const isAreaName = (value: string) => /^[ABC](?:[1-9])$/.test(value)
   const parsedRows = rows
+    // Exact input range A5:U16. Do not read lower tables; they also contain 1-12.
     .filter(r => {
       const b = parseInt(textAt(r, 0))
       return !isNaN(b) && b >= 1 && b <= 12
     })
     .map(r => {
-      const islands = [
-        { name: textAt(r, 7), amount: numberAt(r, 8), returnAmount: numberAt(r, 9) },
-        { name: textAt(r, 10), amount: numberAt(r, 11), returnAmount: numberAt(r, 12) },
-        { name: textAt(r, 13), amount: numberAt(r, 14), returnAmount: numberAt(r, 15) },
+      const islandInputs = [
+        { name: textAt(r, 7), amountText: textAt(r, 8), returnText: textAt(r, 9), amount: numberAt(r, 8), returnAmount: numberAt(r, 9) },
+        { name: textAt(r, 10), amountText: textAt(r, 11), returnText: textAt(r, 12), amount: numberAt(r, 11), returnAmount: numberAt(r, 12) },
+        { name: textAt(r, 13), amountText: textAt(r, 14), returnText: textAt(r, 15), amount: numberAt(r, 14), returnAmount: numberAt(r, 15) },
       ]
+      const islands = islandInputs.map(({ name, amount, returnAmount }) => ({
+        name,
+        amount,
+        returnAmount,
+      }))
       const adjustments = [
         { label: 'MiniGame', amount: numberAt(r, 17) },
         { label: 'MoneyDrop', amount: numberAt(r, 18) },
@@ -141,9 +154,15 @@ export async function fetchWaveInputs(wave: number): Promise<{ rows: WaveInputRo
       ].filter(x => x.amount)
       const betTarget = textAt(r, 2)
       const betAmount = numberAt(r, 3)
+      const betAmountText = textAt(r, 3)
       const kingAmount = numberAt(r, 5)
-      const hasBetInput = isFilled(betTarget)
-      const hasBidInput = islands.some(x => isFilled(x.name) || x.amount)
+      const kingAmountText = textAt(r, 5)
+      // Submission status should mirror sheet ownership of the input cells:
+      // Bet saved = C and D contain data. Bid saved = king bid F or any H:I/K:L/N:O pair.
+      const hasBetInput = isFilled(betTarget) && isFilled(betAmountText)
+      const hasKingBidInput = isFilled(kingAmountText)
+      const hasIslandBidInput = islandInputs.some(x => isFilled(x.name) && isAreaName(x.name) && isFilled(x.amountText))
+      const hasBidInput = hasKingBidInput || hasIslandBidInput
       const hasInput = Boolean(
         hasBetInput || hasBidInput
       )
@@ -166,7 +185,8 @@ export async function fetchWaveInputs(wave: number): Promise<{ rows: WaveInputRo
   const parsed = Array.from(
     parsedRows.reduce((byBaan, row) => byBaan.set(row.baan, row), new Map<number, WaveInputRow>()).values()
   ).sort((a, b) => a.baan - b.baan)
-  let kingDisaster: number | null = parseInt(rows?.[21]?.[7] ?? '')
+  const infoRows = await fetchWaveRangeGViz(wave, 'H22:H22')
+  let kingDisaster: number | null = parseInt(infoRows?.[0]?.[0] ?? '')
   if (isNaN(kingDisaster)) kingDisaster = null
   return { rows: parsed, kingDisaster }
 }

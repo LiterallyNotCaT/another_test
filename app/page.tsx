@@ -49,14 +49,14 @@ export default function HomePage() {
 
       <section className="wire-content main-nav-content">
         <div className="mx-auto max-w-5xl">
-          <div className="main-nav-grid flex flex-wrap justify-center gap-5">
+          <div className="main-nav-grid grid grid-cols-1 justify-items-center gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {pages.map(page => {
               const Icon = page.icon
               return (
                 <Link
                   key={page.id}
                   href={page.href}
-                  className="content-card group flex min-h-32 w-full flex-col justify-between transition-all duration-200 hover:-translate-y-1 hover:border-blue-300 sm:w-[calc(50%-10px)] lg:w-[calc(33.333%-14px)]"
+                  className="content-card group flex min-h-32 w-full max-w-[410px] flex-col justify-between transition-all duration-200 hover:-translate-y-1 hover:border-blue-300"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div

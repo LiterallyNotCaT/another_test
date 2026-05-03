@@ -42,7 +42,6 @@ export default function BiddingCart({
   const overBudget = remaining < 0
   const hasZeroAmount = items.some(i=>i.amount <= 0)
   const hasKingBid = items.some(i=>i.area === 'KING')
-  const needsKingDisaster = isKing && hasKingBid && !kingDisaster
   const usagePct   = balance > 0 ? Math.min(1, totalBet / balance) : 0
 
   const updateAmount = (area: string, raw: number) => {
@@ -104,7 +103,7 @@ export default function BiddingCart({
       {isKing && (
         <div className="king-bid-card colorful-box colorful-box-gold cart-card rounded-3xl p-3 text-sm text-yellow-900">
           <div className="font-display font-bold">King control</div>
-          <div className="mt-1 text-xs">Choose disaster for this wave. Click KING on the map only if you also want to bid for next king.</div>
+          <div className="mt-1 text-xs">Choose disaster for this wave. KING bid is separate and can be added from the map.</div>
           {!hasKingBid && (
             <button type="button" onClick={()=>onUpdate([...items, { area: 'KING', amount: balance >= 100 ? 100 : 0 }])}
               disabled={!isOpen || balance < 100}
@@ -244,21 +243,20 @@ export default function BiddingCart({
 
         {/* Submit */}
         <button onClick={onSubmit}
-          disabled={!isOpen || (items.length===0 && !(isKing && kingDisaster)) || overBudget || hasZeroAmount || needsKingDisaster}
+          disabled={!isOpen || (items.length===0 && !(isKing && kingDisaster)) || overBudget || hasZeroAmount}
           className={clsx(
             'btn w-full text-sm action-pill',
-            isOpen && (items.length>0 || (isKing && kingDisaster)) && !overBudget && !hasZeroAmount && !needsKingDisaster
+            isOpen && (items.length>0 || (isKing && kingDisaster)) && !overBudget && !hasZeroAmount
               ? 'btn-primary'
               : 'opacity-40 cursor-not-allowed bg-slate-800 text-slate-500 border border-transparent'
           )}
-          style={isOpen && (items.length>0 || (isKing && kingDisaster)) && !overBudget && !hasZeroAmount && !needsKingDisaster ? {
+          style={isOpen && (items.length>0 || (isKing && kingDisaster)) && !overBudget && !hasZeroAmount ? {
             background: `linear-gradient(135deg, ${color}, ${color}aa)`,
             boxShadow: `0 0 20px ${color}30`,
           } : undefined}>
           {!isOpen ? '🔒 ปิดรับการลงทุน'
             : overBudget ? '⚠ เงินไม่เพียงพอ'
             : items.length===0 && !(isKing && kingDisaster) ? 'เลือกพื้นที่ก่อน'
-            : needsKingDisaster ? 'เลือก King Disaster ก่อน'
             : (
               <span className="flex items-center gap-2">
                 ยืนยัน {items.length} พื้นที่ · {totalBet.toLocaleString()}

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import clsx from 'clsx'
 import HistoryPanel from './HistoryPanel'
 import { DISASTER_AREAS, HOUSE_NAMES, SHEET_ID, TOTAL_WAVES, getWaveSheetQuery } from '@/lib/constants'
-import { getGameState, subscribeStore } from '@/lib/store'
+import { getGameState, subscribeStore, syncGameStateFromSheet } from '@/lib/store'
 
 type HistoryType = 'income' | 'bet' | 'reward' | 'lose' | 'start' | 'disaster'
 
@@ -76,7 +76,12 @@ export default function FinanceHistory({
   useEffect(() => {
     const update = () => setCurrentWave(getGameState().currentWave)
     const unsub = subscribeStore(update)
-    const poll = window.setInterval(update, 3000)
+    const sync = async () => {
+      const remote = await syncGameStateFromSheet()
+      setCurrentWave((remote ?? getGameState()).currentWave)
+    }
+    const poll = window.setInterval(sync, 3000)
+    void sync()
     return () => { unsub(); window.clearInterval(poll) }
   }, [])
   useEffect(() => {

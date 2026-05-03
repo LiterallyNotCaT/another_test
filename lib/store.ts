@@ -2,12 +2,14 @@
 // ============================================================
 // CLIENT-SIDE GAME STATE  (localStorage + BroadcastChannel)
 // ============================================================
-import { GameState, WaveSubmission } from './constants'
+import { GameState, SHEET_ID, WaveSubmission } from './constants'
 
 const KEY_GAME_STATE    = 'biggame_state'
 const KEY_SUBMISSIONS   = 'biggame_submissions'
 const KEY_MAP_OWNERSHIP = 'biggame_map'
 const KEY_DISASTERS     = 'biggame_disasters'
+const STATE_SHEET       = 'GAME_STATE'
+const GAS_URL           = process.env.NEXT_PUBLIC_GAS_URL ?? ''
 
 function read<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback
@@ -37,8 +39,92 @@ export const defaultGameState: GameState = { currentWave: 1, isOpen: false, time
 export function getGameState(): GameState {
   return { ...defaultGameState, ...read<Partial<GameState>>(KEY_GAME_STATE, {}) }
 }
-export function setGameState(patch: Partial<GameState>) {
-  write(KEY_GAME_STATE, { ...getGameState(), ...patch })
+export function setGameState(patch: Partial<GameState>, options: { sync?: boolean } = {}) {
+  const next = { ...getGameState(), ...patch, updatedAt: new Date().toISOString() }
+  write(KEY_GAME_STATE, next)
+  if (options.sync !== false) void publishGameStateToSheet(next)
+}
+
+function parseGViz(text: string): any[] {
+  const js = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/)?.[1]
+  return js ? JSON.parse(js)?.table?.rows ?? [] : []
+}
+
+function cellText(row: any, idx: number) {
+  return String(row?.c?.[idx]?.v ?? '').trim()
+}
+
+function sheetTime(value?: string) {
+  const raw = String(value ?? '').trim()
+  const parsed = Date.parse(raw)
+  if (Number.isFinite(parsed)) return parsed
+  const dateParts = raw.match(/^Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?\)$/)
+  if (!dateParts) return NaN
+  const [, year, month, day, hour = '0', minute = '0', second = '0'] = dateParts
+  return new Date(
+    Number(year),
+    Number(month),
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second),
+  ).getTime()
+}
+
+export async function fetchGameStateFromSheet(): Promise<GameState | null> {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(STATE_SHEET)}&t=${Date.now()}`
+    const text = await (await fetch(url, { cache: 'no-store' })).text()
+    const rows = parseGViz(text)
+    const values = new Map<string, string>()
+    rows.forEach(row => {
+      const key = cellText(row, 0)
+      if (key) values.set(key, cellText(row, 1))
+    })
+    const currentWave = parseInt(values.get('currentWave') ?? '')
+    const duration = parseFloat(values.get('duration') ?? '')
+    const gameModeRaw = values.get('gameMode')
+    const updatedAt = values.get('updatedAt') || undefined
+    if (!currentWave || currentWave < 1 || currentWave > 5) return null
+    return {
+      currentWave,
+      isOpen: values.get('isOpen') === 'true',
+      timerEnd: values.get('timerEnd') || null,
+      duration: Number.isFinite(duration) && duration > 0 ? duration : defaultGameState.duration,
+      gameMode: gameModeRaw === 'bet' ? 'bet' : 'bid',
+      updatedAt,
+    }
+  } catch {
+    return null
+  }
+}
+
+export async function syncGameStateFromSheet(): Promise<GameState | null> {
+  const remote = await fetchGameStateFromSheet()
+  if (!remote) return null
+  const local = getGameState()
+  const remoteTime = sheetTime(remote.updatedAt)
+  const localTime = sheetTime(local.updatedAt)
+  if (Number.isFinite(localTime) && (!Number.isFinite(remoteTime) || localTime > remoteTime)) {
+    return local
+  }
+  write(KEY_GAME_STATE, remote)
+  return remote
+}
+
+export async function publishGameStateToSheet(state: GameState = getGameState()) {
+  if (!GAS_URL) return { ok: false, message: 'NEXT_PUBLIC_GAS_URL not configured' }
+  try {
+    await fetch(GAS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'writeGameState', state }),
+    })
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, message: String(e) }
+  }
 }
 
 export function getMapOwnership(): Record<string, number> {
