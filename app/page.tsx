@@ -1,12 +1,11 @@
 import Link from 'next/link'
-import { ArrowRight, BarChart3, Gauge, Gavel, ShieldCheck, Trophy } from 'lucide-react'
+import { ArrowRight, BarChart3, Gavel, ShieldCheck, Trophy } from 'lucide-react'
 
 const pages = [
   {
     id: 'bidding',
     href: '/bidding',
     title: 'Bidding',
-    desc: 'House login, map selection, and investment submission.',
     icon: Gavel,
     accent: '#38bdf8',
   },
@@ -14,7 +13,6 @@ const pages = [
     id: 'morning',
     href: '/scoreboard-morning',
     title: 'Morning Scoreboard',
-    desc: 'Rankings and score detail for the morning game.',
     icon: Trophy,
     accent: '#f59e0b',
   },
@@ -22,26 +20,22 @@ const pages = [
     id: 'ambassador',
     href: '/scoreboard-ambassador',
     title: 'Ambassador View',
-    desc: 'Shared map status, balances, history, and leaderboard.',
     icon: BarChart3,
     accent: '#10b981',
+  },
+  {
+    id: 'afternoon',
+    href: '/scoreboard-afternoon',
+    title: 'Afternoon Scoreboard',
+    icon: Trophy,
+    accent: '#06b6d4',
   },
   {
     id: 'admin',
     href: '/admin',
     title: 'Admin Panel',
-    desc: 'Wave, timer, mode, and processing controls.',
     icon: ShieldCheck,
     accent: '#60a5fa',
-  },
-  {
-    id: 'live-game',
-    href: '/bidding',
-    title: 'Live Game',
-    desc: 'Jump straight into the current house action.',
-    icon: Gauge,
-    accent: '#a78bfa',
-    wide: true,
   },
 ]
 
@@ -49,27 +43,20 @@ export default function HomePage() {
   return (
     <main className="wire-page min-h-screen">
       <header className="wire-topbar">
-        <div className="wire-title">BigGame Control Suite</div>
-        <div className="wire-time">Operations Portal</div>
+        <div className="wire-title">BigGame 2026</div>
+        <div className="wire-time">Main Page</div>
       </header>
 
-      <section className="wire-content">
-        <div className="mx-auto max-w-4xl">
-          <div className="py-6 md:py-10">
-            <p className="text-label">BIGGAME 2025</p>
-            <h1 className="mt-2 font-display text-3xl md:text-5xl font-bold leading-tight text-slate-900">
-              Game control.
-            </h1>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
+      <section className="wire-content main-nav-content">
+        <div className="mx-auto max-w-5xl">
+          <div className="main-nav-grid flex flex-wrap justify-center gap-5">
             {pages.map(page => {
               const Icon = page.icon
               return (
                 <Link
                   key={page.id}
                   href={page.href}
-                  className={`content-card group flex min-h-32 flex-col justify-between transition-all duration-200 hover:-translate-y-1 hover:border-blue-300 ${page.wide ? 'md:col-span-2' : ''}`}
+                  className="content-card group flex min-h-32 w-full flex-col justify-between transition-all duration-200 hover:-translate-y-1 hover:border-blue-300 sm:w-[calc(50%-10px)] lg:w-[calc(33.333%-14px)]"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div
@@ -82,7 +69,6 @@ export default function HomePage() {
                   </div>
                   <div className="mt-6">
                     <h2 className="font-display text-xl font-bold text-slate-900">{page.title}</h2>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">{page.desc}</p>
                   </div>
                 </Link>
               )

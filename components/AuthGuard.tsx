@@ -47,7 +47,7 @@ export default function AuthGuard({
   }
 
   return (
-    <div className="min-h-screen app-shell flex items-center justify-center px-4 py-6">
+    <div className="auth-page min-h-screen app-shell flex items-center justify-center px-4 py-6">
       {/* Ambient */}
       <div className="pointer-events-none fixed inset-0">
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-96 h-96 rounded-full blur-[100px]"
@@ -55,7 +55,7 @@ export default function AuthGuard({
       </div>
 
       <div
-        className={`relative z-10 w-full max-w-[22rem] content-card compact-auth-card p-5 sm:p-6
+        className={`auth-card relative z-10 w-full max-w-[22rem] content-card compact-auth-card p-5 sm:p-6
           transition-all duration-150 ${shake ? 'animate-[shake_0.4s_ease-in-out]' : ''}`}
         style={{ borderColor: error ? 'rgba(239,68,68,0.3)' : undefined }}
       >

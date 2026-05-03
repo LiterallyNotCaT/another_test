@@ -5,7 +5,7 @@ import { Home } from 'lucide-react'
 export default function HomeButton({ className = '' }: { className?: string }) {
   return (
     <Link href="/"
-      className={`home-button inline-flex items-center gap-2 glass-light rounded-lg px-3 py-2
+      className={`home-button inline-flex items-center gap-2.5 glass-light rounded-xl px-4 py-2.5
         text-slate-400 hover:text-white hover:border-white/15
         transition-all duration-200 group ${className}`}>
       <Home size={14} className="group-hover:scale-110 transition-transform duration-200" />

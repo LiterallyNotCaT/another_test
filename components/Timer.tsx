@@ -44,12 +44,12 @@ export default function Timer({ endTime, isOpen, onExpire, compact }: TimerProps
   const secs    = Math.floor((remaining % 60000) / 1000)
   const display = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`
   const pct     = totalRef.current > 0 ? Math.min(1, remaining / totalRef.current) : 0
-  const urgent  = isOpen && remaining > 0 && remaining < 60000
+  const urgent  = isOpen && remaining > 0 && remaining <= 30000
   const active  = isOpen && !expired && remaining > 0
 
   const colorClass = !isOpen ? 'text-slate-600'
     : expired       ? 'text-red-400'
-    : urgent        ? 'text-orange-400'
+    : urgent        ? 'text-red-400'
     :                 'text-cyan-400'
 
   if (compact) {
@@ -61,7 +61,7 @@ export default function Timer({ endTime, isOpen, onExpire, compact }: TimerProps
       )}
         style={active ? {
           textShadow: urgent
-            ? '0 0 16px rgba(251,146,60,0.7)'
+            ? '0 0 16px rgba(239,68,68,0.78)'
             : '0 0 16px rgba(34,211,238,0.6)'
         } : undefined}>
         {!isOpen ? 'STANDBY' : expired ? 'TIME UP' : display}
@@ -72,7 +72,7 @@ export default function Timer({ endTime, isOpen, onExpire, compact }: TimerProps
   return (
     <div className={clsx(
       'glass-light rounded-xl px-4 py-2.5 flex items-center gap-3 transition-all',
-      urgent && 'border-orange-500/30'
+      urgent && 'border-red-500/30'
     )}
       style={urgent ? { boxShadow: '0 0 16px rgba(239,68,68,0.2)' } : undefined}>
 
@@ -83,7 +83,7 @@ export default function Timer({ endTime, isOpen, onExpire, compact }: TimerProps
       <div>
         <div className="text-label mb-0.5">Timer</div>
         <div className={clsx('font-mono text-lg font-bold tracking-wider', colorClass, urgent && 'timer-urgent')}
-          style={active ? { textShadow: urgent ? '0 0 14px rgba(251,146,60,0.7)' : '0 0 14px rgba(34,211,238,0.6)' } : undefined}>
+        style={active ? { textShadow: urgent ? '0 0 14px rgba(239,68,68,0.78)' : '0 0 14px rgba(34,211,238,0.6)' } : undefined}>
           {!isOpen ? '--:--' : expired ? 'END' : display}
         </div>
       </div>

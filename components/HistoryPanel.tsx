@@ -18,6 +18,7 @@ interface HistoryPanelProps {
   balance?:   number
   title?:     string
   maxHeight?: string
+  chronological?: boolean
 }
 
 const TYPE_META = {
@@ -30,7 +31,7 @@ const TYPE_META = {
 }
 
 export default function HistoryPanel({
-  entries, baan, balance, title, maxHeight = '420px',
+  entries, baan, balance, title, maxHeight = '420px', chronological = false,
 }: HistoryPanelProps) {
   const color = baan ? HOUSE_COLORS[baan] : '#3b82f6'
 
@@ -41,14 +42,23 @@ export default function HistoryPanel({
     if (!grouped[key]) grouped[key] = []
     grouped[key].push(e)
   }
-  const groupKeys = Object.keys(grouped).reverse()
+  const groupKeys = Object.keys(grouped).sort((a, b) => {
+    if (chronological) {
+      if (a === 'start') return -1
+      if (b === 'start') return 1
+      return Number(a) - Number(b)
+    }
+    if (a === 'start') return 1
+    if (b === 'start') return -1
+    return Number(b) - Number(a)
+  })
 
   return (
-    <div className="flex flex-col h-full gap-3">
+    <div className="history-panel flex flex-col gap-3">
       {/* Title row */}
       {(title || baan) && (
         <div className="flex items-center justify-between flex-shrink-0">
-          {title && <h3 className="font-display font-semibold text-sm text-slate-300">{title}</h3>}
+          {title && <h3 className="history-panel-title font-display font-semibold text-sm text-slate-300">{title}</h3>}
           {baan && (
             <span className="badge" style={{
               background: color + '18',
@@ -61,10 +71,9 @@ export default function HistoryPanel({
         </div>
       )}
 
-      {/* Balance pill */}
       {balance !== undefined && (
         <div className="glass-light rounded-xl px-4 py-3 flex items-center justify-between flex-shrink-0">
-          <span className="text-label">BALANCE</span>
+          <span className="text-label">Current Balance</span>
           <span className="font-mono font-bold text-lg text-green-400 text-glow-green">
             {balance.toLocaleString()}
           </span>
@@ -72,7 +81,7 @@ export default function HistoryPanel({
       )}
 
       {/* Scrollable list */}
-      <div className="flex-1 overflow-y-auto space-y-4 pr-0.5" style={{ maxHeight }}>
+      <div className="history-panel-list flex-1 space-y-4 pr-0.5" style={{ maxHeight }}>
         {groupKeys.map(key => {
           const groupEntries = grouped[key]
           const isStart = key === 'start'
@@ -81,7 +90,7 @@ export default function HistoryPanel({
               {/* Wave divider */}
               <div className="flex items-center gap-3 mb-2.5">
                 <div className="flex-1 h-px" style={{ background: `linear-gradient(90deg, ${color}40, transparent)` }} />
-                <span className="text-2xs font-display font-bold tracking-widest px-2.5 py-1 rounded-full"
+                <span className="history-wave-divider-label text-2xs font-display font-bold tracking-widest px-3 py-1.5 rounded-full"
                   style={{ background: color + '18', color }}>
                   {isStart ? 'เริ่มต้น' : `รอบที่ ${key}`}
                 </span>
@@ -90,10 +99,10 @@ export default function HistoryPanel({
 
               {/* Entries */}
               <div className="space-y-1.5">
-                {groupEntries.map((entry, i) => {
+                {(chronological ? groupEntries : [...groupEntries].reverse()).map((entry, i) => {
                   const meta = TYPE_META[entry.type]
                   const Icon = meta.icon
-                  const isPositive = ['income','reward','start'].includes(entry.type)
+                  const isPositive = entry.amount === 0 || ['income','reward','start'].includes(entry.type)
                   return (
                     <div key={i} className="glass-light rounded-xl px-3 py-2.5 flex items-start gap-3">
                       {/* Icon */}
@@ -105,7 +114,7 @@ export default function HistoryPanel({
                       <div className="flex-1 min-w-0">
                         <div className="text-sm text-slate-300 leading-snug">{entry.label}</div>
                         {entry.detail && (
-                          <div className="text-2xs text-slate-600 mt-0.5 leading-relaxed">{entry.detail}</div>
+                          <div className="text-2xs text-slate-600 mt-0.5 leading-relaxed whitespace-pre-line">{entry.detail}</div>
                         )}
                         {entry.timestamp && (
                           <div className="text-2xs text-slate-700 mt-0.5 font-mono">{entry.timestamp}</div>

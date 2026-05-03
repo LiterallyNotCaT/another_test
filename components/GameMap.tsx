@@ -16,12 +16,12 @@ const GROUPS = [
   { id:'A', areas:['A1','A2','A3','A4','A5'],               income:'180%', dis:'90%' },
   { id:'B', areas:['B1','B2','B3','B4','B5','B6'],          income:'160%', dis:'80%' },
   { id:'C', areas:['C1','C2','C3','C4','C5','C6','C7','C8','C9'], income:'140%', dis:'70%' },
+  { id:'D', areas:['KING'],                                 income:'King', dis:'choose D' },
 ]
-const GROUP_COLORS = { A: '#38bdf8', B: '#a78bfa', C: '#34d399' }
-
-const D_IDS = ['D1','D2','D3','D4','D5','D6','D7','D8','D9']
+const GROUP_COLORS = { A: '#38bdf8', B: '#a78bfa', C: '#34d399', D: '#f59e0b' }
 
 function getAreaDisasters(area: string): number[] {
+  if (area === 'KING') return []
   const out: number[] = []
   for (const [num, data] of Object.entries(DISASTER_AREAS)) {
     const n = parseInt(num)
@@ -48,10 +48,13 @@ export default function GameMap({
   const filterSet = filterDisaster != null ? getAffected(filterDisaster) : null
   const kingSet   = kingDisaster   != null ? getAffected(kingDisaster)   : null
 
-  const tileSize = compact ? 'w-10 h-10' : 'aspect-square min-h-[54px]'
+  const tileClass = compact ? 'map-tile-deluxe-compact' : 'map-tile-deluxe-regular'
+  const gridTileSize = compact
+    ? 'clamp(44px, 5.2vw, 76px)'
+    : 'clamp(56px, 7vw, 116px)'
 
   return (
-    <div className="space-y-5 select-none">
+    <div className={clsx('game-map select-none', compact ? 'game-map-compact' : 'game-map-regular')}>
       {/* Filter notice */}
       {filterDisaster != null && (
         <div className="toast-lift flex items-center gap-2 px-3 py-2 rounded-2xl bg-red-950/50 border border-red-400/25 text-xs text-red-300 shadow-[0_18px_45px_rgba(127,29,29,0.22)]">
@@ -67,9 +70,9 @@ export default function GameMap({
       )}
 
       {/* Map groups */}
-      <div className="map-infographic">
+      <div className="map-infographic map-unified-board">
       {GROUPS.map(group => {
-        const gc = GROUP_COLORS[group.id as 'A'|'B'|'C']
+        const gc = GROUP_COLORS[group.id as 'A'|'B'|'C'|'D']
         return (
           <div key={group.id} className="map-group-card">
             {/* Group label */}
@@ -88,8 +91,16 @@ export default function GameMap({
             </div>
 
             {/* Tiles */}
-            <div className="map-tile-grid">
+            <div
+              className="map-tile-grid"
+              style={{
+                gridTemplateColumns: group.id === 'D'
+                  ? `minmax(0, ${gridTileSize})`
+                  : `repeat(${group.areas.length}, minmax(0, ${gridTileSize}))`,
+              }}
+            >
               {group.areas.map(area => {
+                const isKingIsland = area === 'KING'
                 const owner       = ownership[area] || 0
                 const isSelected  = selected.includes(area)
                 const disasters   = getAreaDisasters(area)
@@ -98,16 +109,16 @@ export default function GameMap({
                 const dimmed      = filterSet != null && !isFiltered
 
                 // Compute visual state
-                let bg        = 'rgba(19,25,34,0.9)'
+                let bg        = isKingIsland ? 'rgba(245,158,11,0.12)' : 'rgba(19,25,34,0.9)'
                 let border    = 'rgba(255,255,255,0.06)'
-                let textColor = '#475569'
+                let textColor = isKingIsland ? '#b45309' : '#475569'
 
                 if (owner > 0 && !dimmed) {
                   const c = HOUSE_COLORS[owner]
                   bg = `${c}1a`; border = `${c}55`; textColor = c
                 }
                 if (isSelected) {
-                  bg = 'rgba(245,158,11,0.15)'; border = 'rgba(245,158,11,0.7)'
+                  bg = isKingIsland ? 'rgba(245,158,11,0.32)' : 'rgba(245,158,11,0.15)'; border = 'rgba(245,158,11,0.7)'
                   textColor = '#fbbf24'
                 }
                 if (filterSet != null) {
@@ -125,35 +136,36 @@ export default function GameMap({
                     title={[
                       area,
                       owner ? `บ้าน ${owner}` : 'ว่าง',
+                      isKingIsland ? 'King island' : '',
                       disasters.length ? 'Disaster ' + disasters.join(', ') : ''
                     ].filter(Boolean).join(' · ')}
                     className={clsx(
-                      tileSize,
-                      'map-tile-deluxe relative rounded-2xl flex flex-col items-center justify-center transition-all duration-150',
+                      tileClass,
+                      'map-tile-deluxe relative flex flex-col items-center justify-center transition-all duration-150',
                       !readOnly && !dimmed && 'map-tile cursor-pointer',
                       readOnly && 'cursor-default',
                       isSelected && 'map-tile-selected ring-2 ring-yellow-300/80 ring-offset-2 ring-offset-[#07090f]',
+                      isKingIsland && 'map-tile-king',
                       isKingHit && !isSelected && 'ring-1 ring-red-500/40',
                     )}
                     style={{ background: bg, border: `1.5px solid ${border}` }}>
 
-                    {/* Area name */}
-                    <span className="font-display font-bold text-xs leading-none" style={{ color: textColor }}>
-                      {area}
-                    </span>
-
-                    {/* Owner badge */}
                     {owner > 0 && !dimmed && (
-                      <span className="font-mono text-[8px] font-bold mt-0.5 opacity-80"
-                        style={{ color: HOUSE_COLORS[owner] }}>#{owner}</span>
+                      <span className="map-tile-owner font-mono text-[10px] font-black"
+                        style={{ '--owner-color': HOUSE_COLORS[owner], background: `${HOUSE_COLORS[owner]}18` } as React.CSSProperties}>
+                        บ้าน {owner}
+                      </span>
                     )}
 
-                    {/* Disaster mini-icons */}
+                    <span className="map-tile-area font-display font-black text-base leading-none" style={{ color: textColor }}>
+                      {isKingIsland ? 'KING' : area}
+                    </span>
+
                     {disasters.length > 0 && !dimmed && (
-                      <div className="mt-1 flex max-w-full justify-center gap-px overflow-hidden">
-                        {disasters.slice(0,3).map(d => (
-                          <span key={d} className="rounded bg-slate-100 px-1 text-[9px] font-bold leading-tight text-slate-700">{D_IDS[(d-1)%9]}</span>
-                        ))}
+                      <div className="map-tile-disasters flex max-w-full justify-center gap-px overflow-hidden">
+                        <span className="rounded bg-slate-100 px-1 text-[9px] font-bold leading-tight text-slate-700">
+                          {disasters.slice(0,3).join(',')}
+                        </span>
                       </div>
                     )}
                   </button>
@@ -166,7 +178,7 @@ export default function GameMap({
       </div>
 
       {/* Legend */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-3 border-t border-white/5">
+      <div className="hidden">
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-3 rounded" style={{ background: 'rgba(19,25,34,0.9)', border: '1.5px solid rgba(255,255,255,0.10)' }} />
           <span className="text-2xs text-slate-700">ว่าง</span>

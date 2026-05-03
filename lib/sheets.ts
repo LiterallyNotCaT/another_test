@@ -105,19 +105,24 @@ export async function fetchWaveBalances(wave: number) {
 export interface WaveInputRow {
   baan: number
   balance: number
+  currentBalance: number
   betTarget: string
   betAmount: number
   betReturn: number
   kingAmount: number
+  kingResult: string
   islands: Array<{ name: string; amount: number; returnAmount: number }>
   adjustments: Array<{ label: string; amount: number }>
   hasInput: boolean
+  hasBetInput: boolean
+  hasBidInput: boolean
 }
 
 export async function fetchWaveInputs(wave: number): Promise<{ rows: WaveInputRow[]; kingDisaster: number | null }> {
   const rows = await fetchWaveGViz(wave)
   const numberAt = (row: string[], idx: number) => parseFloat(String(row[idx] ?? 0)) || 0
   const textAt = (row: string[], idx: number) => String(row[idx] ?? '').trim()
+  const isFilled = (value: string) => value !== '' && value !== '-'
   const parsedRows = rows
     .filter(r => {
       const b = parseInt(textAt(r, 0))
@@ -130,26 +135,32 @@ export async function fetchWaveInputs(wave: number): Promise<{ rows: WaveInputRo
         { name: textAt(r, 13), amount: numberAt(r, 14), returnAmount: numberAt(r, 15) },
       ]
       const adjustments = [
-        { label: textAt(r, 17), amount: numberAt(r, 18) },
-        { label: textAt(r, 19), amount: numberAt(r, 20) },
-      ].filter(x => x.label || x.amount)
+        { label: 'MiniGame', amount: numberAt(r, 17) },
+        { label: 'MoneyDrop', amount: numberAt(r, 18) },
+        { label: 'พลิกเกม', amount: numberAt(r, 19) },
+      ].filter(x => x.amount)
       const betTarget = textAt(r, 2)
       const betAmount = numberAt(r, 3)
       const kingAmount = numberAt(r, 5)
+      const hasBetInput = isFilled(betTarget)
+      const hasBidInput = islands.some(x => isFilled(x.name) || x.amount)
       const hasInput = Boolean(
-        betTarget || betAmount || kingAmount ||
-        islands.some(x => x.name || x.amount)
+        hasBetInput || hasBidInput
       )
       return {
         baan: parseInt(textAt(r, 0)),
         balance: numberAt(r, 1),
+        currentBalance: numberAt(r, 20) || numberAt(r, 1),
         betTarget,
         betAmount,
         betReturn: numberAt(r, 4),
         kingAmount,
+        kingResult: textAt(r, 6),
         islands,
         adjustments,
         hasInput,
+        hasBetInput,
+        hasBidInput,
       }
     })
   const parsed = Array.from(
@@ -168,15 +179,23 @@ export async function fetchWaveInfo(wave: number): Promise<{ king: number | null
   let disaster: number | null = parseInt(rows?.[21]?.[7] ?? '')
   if (isNaN(king)) king = null
   if (isNaN(disaster)) disaster = null
+  const firstNumber = (row: string[]) => {
+    for (const idx of [7, 6, 5, 4, 3, 2, 1, 0]) {
+      const v = parseInt(String(row[idx] ?? ''))
+      if (!isNaN(v)) return v
+    }
+    return null
+  }
   for (const row of rows) {
     if (king != null && disaster != null) break
-    if (String(row[4] ?? '').includes('KING')) {
-      const v = parseInt(row[5])
-      if (!isNaN(v) && king == null) king = v
+    const joined = row.join(' ').toLowerCase()
+    if (joined.includes('king') && king == null) {
+      const v = firstNumber(row)
+      if (v != null) king = v
     }
-    if (String(row[4] ?? '').toLowerCase().includes('disaster')) {
-      const v = parseInt(row[5])
-      if (!isNaN(v) && disaster == null) disaster = v
+    if (joined.includes('disaster') && disaster == null) {
+      const v = firstNumber(row)
+      if (v != null) disaster = v
     }
   }
   return { king, disaster }

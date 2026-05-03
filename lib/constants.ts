@@ -79,6 +79,7 @@ export interface WaveSubmission {
   betAmount?: number
   timestamp: string
   balance: number
+  revision?: number
 }
 
 export interface HouseData {

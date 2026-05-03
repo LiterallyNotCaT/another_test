@@ -77,6 +77,15 @@ function handleWriteWave(payload) {
   if (kingDisaster !== undefined && kingDisaster !== null && (kingDisaster < 1 || kingDisaster > 9)) {
     return { status: 'error', message: 'Invalid king disaster' }
   }
+  if (betAmount !== undefined && betAmount !== null && betAmount < 500) {
+    return { status: 'error', message: 'Bet minimum is 500' }
+  }
+  if (kingAmount !== undefined && kingAmount !== null && kingAmount < 100) {
+    return { status: 'error', message: 'King bid minimum is 100' }
+  }
+  if (Array.isArray(islands) && islands.length > 0 && islands.some(isl => (isl.amount || 0) < 100)) {
+    return { status: 'error', message: 'Island bid minimum is 100' }
+  }
 
   const ss        = SpreadsheetApp.openById(SHEET_ID)
   const sheetName = `Wave ${wave}`
@@ -93,30 +102,38 @@ function handleWriteWave(payload) {
 
   // ── Read current balance to validate ──────────────────
   const currentBalance = sheet.getRange(row, COL.BALANCE).getValue()
-  const hasIslandPayload = Array.isArray(islands)
+  const hasIslandPayload = Array.isArray(islands) && islands.length > 0
   const islandSpend = hasIslandPayload ? islands.reduce((sum, isl) => sum + (isl.amount || 0), 0) : 0
-  const totalSpend = betAmount || islandSpend || kingAmount || 0
+  const hasBetPayload = betTarget !== undefined || betAmount !== undefined
+  const hasDisasterOnlyPayload = kingDisaster !== undefined && !hasBetPayload && !hasIslandPayload && (kingAmount === undefined || kingAmount === null)
+  const existingBetSpend = sheet.getRange(row, COL.BET_AMOUNT).getValue() || 0
+  const existingKingSpend = sheet.getRange(row, COL.KING_AMOUNT).getValue() || 0
+  const existingIslandSpend =
+    (sheet.getRange(row, COL.ISLAND1_AMT).getValue() || 0) +
+    (sheet.getRange(row, COL.ISLAND2_AMT).getValue() || 0) +
+    (sheet.getRange(row, COL.ISLAND3_AMT).getValue() || 0)
+  const nextBetSpend = hasBetPayload ? (betAmount || 0) : existingBetSpend
+  const nextKingSpend = kingAmount !== undefined && kingAmount !== null ? kingAmount : existingKingSpend
+  const nextIslandSpend = hasIslandPayload ? islandSpend : existingIslandSpend
+  const totalSpend = (hasBetPayload ? (betAmount || 0) : 0) +
+    (kingAmount !== undefined && kingAmount !== null ? kingAmount : 0) +
+    (hasIslandPayload ? islandSpend : 0)
+  const totalSpendAfterSave = nextBetSpend + nextKingSpend + nextIslandSpend
 
-  if (totalSpend > currentBalance) {
+  if (totalSpend <= 0 && !hasDisasterOnlyPayload) {
     return {
       status: 'error',
-      message: `ยอดรวม ${totalSpend} เกินกว่า balance ${currentBalance}`
+      message: 'Amount must be greater than 0'
+    }
+  }
+  if (totalSpendAfterSave > currentBalance) {
+    return {
+      status: 'error',
+      message: `ยอดรวม ${totalSpendAfterSave} เกินกว่า balance ${currentBalance}`
     }
   }
 
   // ── Write Bet game ─────────────────────────────────────
-  const hasBetPayload = betTarget !== undefined || betAmount !== undefined
-  if (hasBetPayload) {
-    sheet.getRange(row, COL.KING_AMOUNT).clearContent()
-    for (const c of [
-      { name: COL.ISLAND1_NAME, amt: COL.ISLAND1_AMT },
-      { name: COL.ISLAND2_NAME, amt: COL.ISLAND2_AMT },
-      { name: COL.ISLAND3_NAME, amt: COL.ISLAND3_AMT },
-    ]) {
-      sheet.getRange(row, c.name).clearContent()
-      sheet.getRange(row, c.amt).clearContent()
-    }
-  }
   if (betTarget !== undefined && betTarget !== null) {
     sheet.getRange(row, COL.BET_TARGET).setValue(betTarget)
   }
@@ -146,10 +163,6 @@ function handleWriteWave(payload) {
 
   const islandList = hasIslandPayload ? islands.slice(0, 3) : []
   if (hasIslandPayload) {
-    // Bid mode should not leave stale bet-game inputs in C:D.
-    sheet.getRange(row, COL.BET_TARGET).clearContent()
-    sheet.getRange(row, COL.BET_AMOUNT).clearContent()
-
     // Clear existing island data first
     for (const c of islandCols) {
       sheet.getRange(row, c.name).clearContent()
@@ -177,7 +190,7 @@ function handleWriteWave(payload) {
       kingDisaster,
       islands: islandList,
       totalSpend,
-      remainingBalance: currentBalance - totalSpend,
+      remainingBalance: currentBalance - totalSpendAfterSave,
     }
   }
 }

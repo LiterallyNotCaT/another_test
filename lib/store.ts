@@ -54,7 +54,9 @@ export function getSubmissions(): WaveSubmission[] {
 export function saveSubmission(sub: WaveSubmission) {
   const subs = getSubmissions()
   const idx = subs.findIndex(s => s.baan === sub.baan && s.wave === sub.wave)
-  if (idx >= 0) subs[idx] = sub; else subs.push(sub)
+  const previousRevision = idx >= 0 ? subs[idx].revision ?? 1 : 0
+  const next = { ...sub, revision: previousRevision + 1 }
+  if (idx >= 0) subs[idx] = next; else subs.push(next)
   write(KEY_SUBMISSIONS, subs)
 }
 export { saveSubmission as addSubmission }
