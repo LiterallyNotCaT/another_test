@@ -150,6 +150,7 @@ function BiddingGame({ baan }: { baan:number }) {
   }, [baan])
 
   useEffect(()=>{ fetchKingInfo(); const t=setInterval(fetchKingInfo,20000); return()=>clearInterval(t) },[fetchKingInfo])
+  useEffect(()=>{ void fetchKingInfo() },[fetchKingInfo, gs.currentWave])
 
   /* subscribe store */
   useEffect(()=>{

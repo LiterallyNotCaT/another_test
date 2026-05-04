@@ -2666,10 +2666,10 @@ form .btn.w-full {
 .game-map .map-group-card,
 .map-unified-board .map-group-card {
   display: grid !important;
-  grid-template-columns: 76px minmax(0, 1fr) !important;
+  grid-template-columns: clamp(88px, 9cqw, 112px) minmax(0, 1fr) !important;
   align-items: center !important;
-  gap: 8px !important;
-  padding: 8px !important;
+  gap: 6px !important;
+  padding: 5px 6px !important;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -2679,23 +2679,34 @@ form .btn.w-full {
 .map-unified-board .map-group-card + .map-group-card { border-top: 1px solid #d7e0ed !important; }
 .game-map .map-group-header,
 .map-unified-board .map-group-header {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important;
   margin: 0 !important;
-  gap: 6px !important;
+  gap: 5px !important;
+  white-space: nowrap !important;
+}
+.game-map .map-group-header .min-w-0 {
+  display: flex !important;
+  min-width: 0 !important;
+  align-items: center !important;
+  gap: 4px !important;
+  flex-wrap: nowrap !important;
 }
 .game-map .map-group-header .w-7 {
   width: 24px !important;
   height: 24px !important;
   border-radius: 8px !important;
 }
-.game-map .map-group-header .font-semibold { font-size: 0.8rem !important; line-height: 1.1 !important; }
-.game-map .map-group-meta { gap: 3px !important; }
-.game-map .map-group-meta .badge { padding: 2px 6px !important; font-size: 0.48rem !important; }
+.game-map .map-group-header .font-semibold { font-size: 0.72rem !important; line-height: 1 !important; white-space: nowrap !important; }
+.game-map .map-group-meta { display: flex !important; gap: 2px !important; flex-wrap: nowrap !important; }
+.game-map .map-group-meta .badge { padding: 2px 4px !important; font-size: 0.42rem !important; white-space: nowrap !important; }
 .game-map .map-tile-grid,
 .map-unified-board .map-tile-grid {
-  --map-tile-size: clamp(42px, calc((100cqw - 172px) / 9), 86px);
+  --map-tile-size: clamp(36px, min(calc((100cqw - 168px) / 9), calc((100svh - 330px) / 4.2)), 72px);
   display: grid !important;
   justify-content: start !important;
-  gap: 8px !important;
+  gap: 6px !important;
 }
 .game-map .map-group-card:nth-child(1) .map-tile-grid,
 .map-unified-board .map-group-card:nth-child(1) .map-tile-grid { grid-template-columns: repeat(5, var(--map-tile-size)) !important; }
@@ -2714,7 +2725,7 @@ form .btn.w-full {
   aspect-ratio: 1 / 1 !important;
   max-height: none !important;
   border-radius: 10px !important;
-  padding: 12px 4px 14px !important;
+  padding: 10px 3px 12px !important;
 }
 .game-map .map-tile-deluxe-compact,
 .game-map .map-tile-deluxe-regular { max-height: none !important; }
@@ -2733,8 +2744,8 @@ form .btn.w-full {
   white-space: nowrap;
   color: var(--owner-color) !important;
 }
-.game-map .map-tile-owner { font-size: clamp(0.56rem, 0.78vw, 0.72rem) !important; }
-.game-map .map-tile-area { font-size: clamp(0.82rem, 1.05vw, 1.05rem) !important; }
+.game-map .map-tile-owner { font-size: clamp(0.48rem, 0.68vw, 0.66rem) !important; }
+.game-map .map-tile-area { font-size: clamp(0.72rem, 0.95vw, 0.98rem) !important; }
 .game-map .map-tile-disasters {
   position: absolute;
   bottom: 4px;
@@ -2750,6 +2761,10 @@ form .btn.w-full {
 }
 .game-map .map-tile-king .map-tile-area { color: #744b00 !important; }
 .game-map-compact .map-infographic.map-unified-board { max-height: none; overflow: visible; }
+.game-map-compact .map-group-card,
+.game-map-compact.map-unified-board .map-group-card {
+  min-height: 0 !important;
+}
 
 /* Bidding side panel */
 .wire-layout-bidding { gap: clamp(14px, 1.6vw, 22px); }
@@ -2830,12 +2845,21 @@ form .btn.w-full {
 .fullscreen-scope {
   position: relative;
 }
-.fullscreen-scope:fullscreen {
+.fullscreen-scope:fullscreen,
+.fullscreen-scope.fullscreen-fallback {
   width: 100vw;
   height: 100vh;
   overflow: auto;
   padding: clamp(14px, 2vw, 28px);
   background: #f3f6fb;
+}
+.fullscreen-scope.fullscreen-fallback {
+  position: fixed !important;
+  inset: 0;
+  z-index: 9999;
+}
+body.fullscreen-fallback-open {
+  overflow: hidden;
 }
 .fullscreen-button {
   position: absolute;

@@ -191,6 +191,7 @@ export function startCloudSync(intervalMs = 2000) {
   let inFlight = false
 
   const sync = () => {
+    if (document.visibilityState === 'hidden') return
     if (inFlight) return
     inFlight = true
     void syncGameStateFromCloud().finally(() => {
@@ -200,7 +201,11 @@ export function startCloudSync(intervalMs = 2000) {
 
   sync()
   const intervalId = window.setInterval(sync, intervalMs)
-  return () => window.clearInterval(intervalId)
+  document.addEventListener('visibilitychange', sync)
+  return () => {
+    window.clearInterval(intervalId)
+    document.removeEventListener('visibilitychange', sync)
+  }
 }
 
 export function getMapOwnership(): Record<string, number> {

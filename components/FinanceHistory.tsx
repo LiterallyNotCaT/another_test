@@ -5,6 +5,7 @@ import clsx from 'clsx'
 import HistoryPanel from './HistoryPanel'
 import { DISASTER_AREAS, HOUSE_NAMES, SHEET_ID, TOTAL_WAVES, getWaveSheetQuery } from '@/lib/constants'
 import { getGameState, subscribeStore } from '@/lib/store'
+import { fetchMorningScores } from '@/lib/sheets'
 
 type HistoryType = 'income' | 'bet' | 'reward' | 'lose' | 'start' | 'disaster'
 
@@ -108,6 +109,17 @@ export default function FinanceHistory({
       const nextEntries: OrderedHistoryEntry[] = []
 
       let latestBalance: number | undefined
+      const morning = (await fetchMorningScores()).find(row => row.baan === selectedBaan)?.total
+      if (morning != null) {
+        latestBalance = morning
+        nextEntries.push({
+          order: 0,
+          label: 'Morning score',
+          detail: 'Start point before afternoon game',
+          amount: morning,
+          type: morning >= 0 ? 'income' : 'lose',
+        })
+      }
       for (const wave of wavesToRead) {
         const rows = await fetchSheetRows(getWaveSheetQuery(wave))
         const row = rows.find((r: any) => parseInt(String(r?.c?.[0]?.v ?? '')) === selectedBaan)
@@ -128,9 +140,9 @@ export default function FinanceHistory({
         if (showResults) {
           latestBalance = read(20) != null && String(read(20)).trim() !== ''
             ? numberAt(20)
-            : latestBalance
+            : startingBalance || latestBalance
         }
-        if (showResults && wave === 1) {
+        if (false && showResults && wave === 1) {
           const morningScore = numberAt(1)
           if (morningScore) {
             nextEntries.push({
@@ -200,7 +212,7 @@ export default function FinanceHistory({
           })
         }
         if (!showResults) {
-          latestBalance = startingBalance - betAmountSheet - kingAmount - islandSpentTotal
+          latestBalance = (startingBalance || latestBalance || 0) - betAmountSheet - kingAmount - islandSpentTotal
         }
 
         const extras = [
@@ -288,7 +300,7 @@ export default function FinanceHistory({
 
   useEffect(() => {
     refresh()
-    const t = window.setInterval(refresh, 20000)
+    const t = window.setInterval(refresh, 45000)
     return () => window.clearInterval(t)
   }, [refresh])
 
@@ -296,7 +308,7 @@ export default function FinanceHistory({
     <div className={clsx('finance-history space-y-3', className)}>
       {!showResults && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-          Results are hidden by admin. Balance excludes bet/bid returns and game-score gains until results are shown.
+          Results are hidden by admin. Balance starts from morning/current wave money and subtracts only submitted spending until results are shown.
         </div>
       )}
       {showFilters && (

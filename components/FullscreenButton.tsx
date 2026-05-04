@@ -13,15 +13,28 @@ export default function FullscreenButton({ targetId, className }: FullscreenButt
   const [active, setActive] = useState(false)
 
   useEffect(() => {
-    const update = () => setActive(document.fullscreenElement?.id === targetId)
+    const update = () => {
+      const target = document.getElementById(targetId)
+      setActive(document.fullscreenElement?.id === targetId || target?.classList.contains('fullscreen-fallback') === true)
+    }
     document.addEventListener('fullscreenchange', update)
     update()
-    return () => document.removeEventListener('fullscreenchange', update)
+    return () => {
+      document.removeEventListener('fullscreenchange', update)
+      document.getElementById(targetId)?.classList.remove('fullscreen-fallback')
+      document.body.classList.remove('fullscreen-fallback-open')
+    }
   }, [targetId])
 
   const toggle = async () => {
     const target = document.getElementById(targetId)
     if (!target) return
+    if (!target.requestFullscreen) {
+      target.classList.toggle('fullscreen-fallback')
+      document.body.classList.toggle('fullscreen-fallback-open', target.classList.contains('fullscreen-fallback'))
+      setActive(target.classList.contains('fullscreen-fallback'))
+      return
+    }
     if (document.fullscreenElement) {
       await document.exitFullscreen()
       return

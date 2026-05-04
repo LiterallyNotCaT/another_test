@@ -9,7 +9,7 @@ export const runtime = 'nodejs'
 const GAME_STATE_KEY = 'cloud_biggame_state'
 let cachedState: GameState | null = null
 let cachedAt = 0
-const GET_CACHE_MS = 350
+const GET_CACHE_MS = 800
 
 const defaultState: GameState = {
   currentWave: 1,
