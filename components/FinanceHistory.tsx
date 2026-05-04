@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import clsx from 'clsx'
 import HistoryPanel from './HistoryPanel'
 import { DISASTER_AREAS, HOUSE_NAMES, SHEET_ID, TOTAL_WAVES, getWaveSheetQuery } from '@/lib/constants'
-import { getGameState, subscribeStore, syncGameStateFromSheet } from '@/lib/store'
+import { getGameState, subscribeStore } from '@/lib/store'
 
 type HistoryType = 'income' | 'bet' | 'reward' | 'lose' | 'start' | 'disaster'
 
@@ -26,6 +26,7 @@ interface FinanceHistoryProps {
   initialWave?: number | 'all'
   lockBaan?: boolean
   showFilters?: boolean
+  showResults?: boolean
   className?: string
 }
 
@@ -61,6 +62,7 @@ export default function FinanceHistory({
   initialWave = 'all',
   lockBaan = false,
   showFilters = true,
+  showResults: showResultsOverride,
   className,
 }: FinanceHistoryProps) {
   const [selectedBaan, setSelectedBaan] = useState<number | null>(initialBaan)
@@ -70,19 +72,19 @@ export default function FinanceHistory({
   const [lastRefresh, setLastRefresh] = useState('')
   const [loading, setLoading] = useState(false)
   const [currentWave, setCurrentWave] = useState(getGameState().currentWave)
+  const [stateShowResults, setStateShowResults] = useState(getGameState().showResults === true)
+  const showResults = showResultsOverride ?? stateShowResults
 
   useEffect(() => setSelectedBaan(initialBaan), [initialBaan])
   useEffect(() => setSelectedWave(initialWave), [initialWave])
   useEffect(() => {
-    const update = () => setCurrentWave(getGameState().currentWave)
-    const unsub = subscribeStore(update)
-    const sync = async () => {
-      const remote = await syncGameStateFromSheet()
-      setCurrentWave((remote ?? getGameState()).currentWave)
+    const update = () => {
+      const state = getGameState()
+      setCurrentWave(state.currentWave)
+      setStateShowResults(state.showResults === true)
     }
-    const poll = window.setInterval(sync, 3000)
-    void sync()
-    return () => { unsub(); window.clearInterval(poll) }
+    const unsub = subscribeStore(update)
+    return unsub
   }, [])
   useEffect(() => {
     if (selectedWave !== 'all' && selectedWave > currentWave) setSelectedWave(currentWave)
@@ -122,10 +124,13 @@ export default function FinanceHistory({
         const read = (idx: number) => c?.[idx]?.v
         const numberAt = (idx: number) => parseFloat(String(read(idx) ?? 0)) || 0
         const textAt = (idx: number) => String(read(idx) ?? '').trim()
-        latestBalance = read(20) != null && String(read(20)).trim() !== ''
-          ? numberAt(20)
-          : latestBalance
-        if (wave === 1) {
+        const startingBalance = numberAt(1)
+        if (showResults) {
+          latestBalance = read(20) != null && String(read(20)).trim() !== ''
+            ? numberAt(20)
+            : latestBalance
+        }
+        if (showResults && wave === 1) {
           const morningScore = numberAt(1)
           if (morningScore) {
             nextEntries.push({
@@ -194,13 +199,16 @@ export default function FinanceHistory({
             type: 'bet',
           })
         }
+        if (!showResults) {
+          latestBalance = startingBalance - betAmountSheet - kingAmount - islandSpentTotal
+        }
 
         const extras = [
           { label: 'MiniGame', amount: numberAt(17) },
           { label: 'MoneyDrop', amount: numberAt(18) },
           { label: 'พลิกเกม', amount: numberAt(19) },
         ].filter(x => x.amount)
-        extras.forEach((x, idx) => nextEntries.push({
+        if (showResults) extras.forEach((x, idx) => nextEntries.push({
           order: wave * 100 + 40 + idx,
           wave,
           label: x.label,
@@ -209,7 +217,7 @@ export default function FinanceHistory({
           type: x.amount >= 0 ? 'income' : 'lose',
         }))
 
-        if (betHouse || betAmountSheet || betReturn) {
+        if (showResults && (betHouse || betAmountSheet || betReturn)) {
           nextEntries.push({
             order: wave * 100 + 60,
             wave,
@@ -219,7 +227,7 @@ export default function FinanceHistory({
             type: betReturn > 0 ? 'reward' : 'lose',
           })
         }
-        if (islandReturnLines.length) {
+        if (showResults && islandReturnLines.length) {
           nextEntries.push({
             order: wave * 100 + 70,
             wave,
@@ -229,7 +237,7 @@ export default function FinanceHistory({
             type: islandReturnTotal > 0 ? 'income' : 'lose',
           })
         }
-        if (kingAmount || kingResult || winningKingHouse) {
+        if (showResults && (kingAmount || kingResult || winningKingHouse)) {
           nextEntries.push({
             order: wave * 100 + 80,
             wave,
@@ -244,7 +252,7 @@ export default function FinanceHistory({
         if (wave === 5) {
           const kingFinalBonus = numberAt(21)
           const islandFinalBonus = numberAt(22)
-          if (kingFinalBonus) {
+          if (showResults && kingFinalBonus) {
             nextEntries.push({
               order: wave * 100 + 100,
               wave,
@@ -254,7 +262,7 @@ export default function FinanceHistory({
               type: 'reward',
             })
           }
-          if (islandFinalBonus) {
+          if (showResults && islandFinalBonus) {
             nextEntries.push({
               order: wave * 100 + 110,
               wave,
@@ -276,7 +284,7 @@ export default function FinanceHistory({
     } finally {
       setLoading(false)
     }
-  }, [selectedBaan, wavesToRead])
+  }, [selectedBaan, wavesToRead, showResults])
 
   useEffect(() => {
     refresh()
@@ -286,6 +294,11 @@ export default function FinanceHistory({
 
   return (
     <div className={clsx('finance-history space-y-3', className)}>
+      {!showResults && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+          Results are hidden by admin. Balance excludes bet/bid returns and game-score gains until results are shown.
+        </div>
+      )}
       {showFilters && (
         <div className="flex flex-wrap items-center gap-2">
           {!lockBaan && (

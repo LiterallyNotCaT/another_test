@@ -11,7 +11,7 @@ import { LogOut, PanelRight, Sparkles } from 'lucide-react'
 import { HOUSE_NAMES, SHEET_ID, getBaanPassword, getWaveSheetQuery } from '@/lib/constants'
 import {
   getGameState, getMapOwnership, saveSubmission, getSubmissionsForBaan,
-  subscribeStore, getActiveDisasterForWave, syncGameStateFromSheet, startCloudSync,
+  subscribeStore, getActiveDisasterForWave, startCloudSync,
 } from '@/lib/store'
 import { fetchWaveInfo, writeToSheet } from '@/lib/sheets'
 
@@ -102,6 +102,8 @@ function BiddingGame({ baan }: { baan:number }) {
   const kingBid = cart.find(i => i.area === 'KING')
   const kingBidAmount = kingBid?.amount || 0
   const betSpend = parseFloat(betAmount) || 0
+  const betAmountNumber = betAmount.trim() === '' ? NaN : Number(betAmount)
+  const isBetAmountValid = Number.isFinite(betAmountNumber) && betAmountNumber >= 500 && betAmountNumber <= balance
   const isBetMode = gs.gameMode === 'bet'
   const currentSubmission = getSubmissionsForBaan(baan).find(s => s.wave === gs.currentWave)
   const priorBetSpend = !isBetMode ? sheetBetSpend || currentSubmission?.betAmount || 0 : 0
@@ -152,14 +154,7 @@ function BiddingGame({ baan }: { baan:number }) {
   useEffect(()=>{
     if (!isLoaded) return
     const u=subscribeStore(()=>{ setGS(getGameState()); setOwnership(getMapOwnership()) })
-    const sync = async () => {
-      const remote = await syncGameStateFromSheet()
-      setGS(remote ?? getGameState())
-      setOwnership(getMapOwnership())
-    }
-    const p=setInterval(sync,3000)
-    void sync()
-    return()=>{ u(); clearInterval(p) }
+    return u
   },[isLoaded])
 
   /* map select */
@@ -173,6 +168,7 @@ function BiddingGame({ baan }: { baan:number }) {
 
   /* save — local store + write to Google Sheet */
   const handleSave = useCallback(async ()=>{
+    if(!gs.isOpen) return
     const hasInvalidBidAmount = cart.some(i => i.amount <= 0)
     if(isBetMode && (betSpend < 500 || betSpend > balance)) return
     if(!isBetMode && (hasInvalidBidAmount || (totalBet <= 0 && !(canChooseKingDisaster && kingDis)) || totalBet > effectiveBalance)) return
@@ -212,15 +208,29 @@ function BiddingGame({ baan }: { baan:number }) {
       setSaveMessage('Admin sync error')
       console.error(e)
     })
-  },[baan,cart,gs.currentWave,canChooseKingDisaster,kingDis,balance,totalBet,isBetMode,betTarget,betSpend,fetchBalance,effectiveBalance,currentSubmission,islandCart,kingBid,kingBidAmount])
+  },[baan,cart,gs.currentWave,gs.isOpen,canChooseKingDisaster,kingDis,balance,totalBet,isBetMode,betTarget,betSpend,fetchBalance,effectiveBalance,currentSubmission,islandCart,kingBid,kingBidAmount])
 
   /* autosave */
   useEffect(()=>{
+    if(!gs.isOpen) {
+      clearTimeout(saveTimer.current)
+      return
+    }
     if(cart.length===0&&isSaved) return
     setIsSaved(false); clearTimeout(saveTimer.current)
     saveTimer.current=setTimeout(handleSave,5000)
     return()=>clearTimeout(saveTimer.current)
-  },[cart,kingDis]) // eslint-disable-line
+  },[cart,kingDis,gs.isOpen]) // eslint-disable-line
+
+  const normalizeBetAmount = () => {
+    if (betAmount.trim() === '') return
+    const raw = Number(betAmount)
+    if (!Number.isFinite(raw)) {
+      setBetAmount('')
+      return
+    }
+    setBetAmount(String(Math.min(Math.max(500, raw), balance)))
+  }
 
   if (!isLoaded) return (
     <div className="wire-page-full">
@@ -296,11 +306,16 @@ function BiddingGame({ baan }: { baan:number }) {
                         <label className="text-label mb-2 block">Bet amount</label>
                         <input type="number" value={betAmount} min={500} max={balance} step={100} disabled={!gs.isOpen}
                           onChange={e=>{
-                            const raw = parseFloat(e.target.value)
-                            setBetAmount(e.target.value === '' ? '' : String(Math.min(Math.max(500, isNaN(raw) ? 500 : raw), balance)))
+                            setBetAmount(e.target.value)
                             setIsSaved(false)
                           }}
+                          onBlur={normalizeBetAmount}
                           className="input-base font-mono" placeholder="0" />
+                        {betAmount && !isBetAmountValid && (
+                          <div className="mt-1 text-xs font-semibold text-red-600">
+                            Amount must be 500 - {balance.toLocaleString()}
+                          </div>
+                        )}
                       </div>
                       <div className="sm:col-span-2 grid grid-cols-2 gap-3">
                         <div className="colorful-box colorful-box-blue rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
@@ -314,7 +329,7 @@ function BiddingGame({ baan }: { baan:number }) {
                           </div>
                         </div>
                       </div>
-                      <button onClick={handleSave} disabled={!gs.isOpen || !betTarget || betSpend < 500 || betSpend > balance}
+                      <button onClick={handleSave} disabled={!gs.isOpen || !betTarget || !isBetAmountValid}
                         className="btn btn-primary sm:col-span-2">
                         Submit bet {betSpend ? `· ${betSpend.toLocaleString()}` : ''}
                       </button>
@@ -351,8 +366,8 @@ function BiddingGame({ baan }: { baan:number }) {
                 <div className="wire-section-title">พื้นที่ที่เลือก</div>
                 <BiddingCart baan={baan} balance={effectiveBalance} items={cart} isKing={canChooseKingDisaster}
                   kingDisaster={kingDis}
-                  onUpdate={i=>{setCart([...i.filter(x=>x.area !== 'KING').slice(0,3), ...i.filter(x=>x.area === 'KING').slice(0,1)]);setIsSaved(false)}}
-                  onKingDisaster={d=>{setKingDis(d);setIsSaved(false)}}
+                  onUpdate={i=>{if(!gs.isOpen)return;setCart([...i.filter(x=>x.area !== 'KING').slice(0,3), ...i.filter(x=>x.area === 'KING').slice(0,1)]);setIsSaved(false)}}
+                  onKingDisaster={d=>{if(!gs.isOpen)return;setKingDis(d);setIsSaved(false)}}
                   onSubmit={handleSave} isSaved={isSaved} savedAt={savedAt} isOpen={gs.isOpen} />
                 <div className="wire-section-title bg-blue-500 text-white">
                   {isSaved?(savedAt?`Saved at ${savedAt}`:'Saved'):'Unsaved / autosave in 5s'}
@@ -363,7 +378,7 @@ function BiddingGame({ baan }: { baan:number }) {
           </section>
           {!isBetMode && <section className="wire-history wire-panel">
             <div className="wire-history-body">
-              <FinanceHistory initialBaan={baan} lockBaan showFilters={false} />
+              <FinanceHistory initialBaan={baan} lockBaan showFilters={false} showResults={gs.showResults === true} />
             </div>
           </section>}
         </div>
@@ -377,7 +392,7 @@ function BiddingGame({ baan }: { baan:number }) {
 export default function BiddingPage() {
   const [baan,     setBaan]     = useState<number|null>(null)
   const [checking, setChecking] = useState(true)
-  useEffect(() => startCloudSync(), [])
+  useEffect(() => startCloudSync(800), [])
   useEffect(()=>{ const s=sessionStorage.getItem('baan_login'); if(s) setBaan(parseInt(s)); setChecking(false) },[])
   if (checking) return (
     <div className="min-h-screen app-shell flex items-center justify-center">

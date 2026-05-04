@@ -18,7 +18,7 @@ import { AFTERNOON_SCORE_CSV_URL } from '@/lib/scoreboardSources'
 import { fetchWaveInputs, type WaveInputRow } from '@/lib/sheets'
 import {
   getGameState, setGameState, getMapOwnership,
-  getActiveDisasterForWave, getSubmissions, getSubmissionsForWave, subscribeStore, syncGameStateFromSheet, startCloudSync,
+  getActiveDisasterForWave, getSubmissions, getSubmissionsForWave, subscribeStore, startCloudSync,
 } from '@/lib/store'
 
 function AdminContent() {
@@ -57,7 +57,7 @@ function AdminContent() {
     setIsLoaded(true)
   }, [])
 
-  useEffect(() => startCloudSync(), [])
+  useEffect(() => startCloudSync(800), [])
 
   // ── Fetch all sheet scores ──────────────────────────────
   const fetchAll = useCallback(async () => {
@@ -76,17 +76,6 @@ function AdminContent() {
     const t = setInterval(fetchAll,15000)
     return()=>{ window.clearTimeout(first); clearInterval(t) }
   },[fetchAll])
-
-  useEffect(() => {
-    if (!isLoaded) return
-    const sync = async () => {
-      const remote = await syncGameStateFromSheet()
-      if (remote) setGS(remote)
-    }
-    const first = window.setTimeout(sync, 0)
-    const t = window.setInterval(sync, 8000)
-    return () => { window.clearTimeout(first); window.clearInterval(t) }
-  }, [isLoaded])
 
   useEffect(()=>{
     if (!isLoaded) return
@@ -148,12 +137,12 @@ function AdminContent() {
 
   // ── Controls ────────────────────────────────────────────
   const gotoWave = (w:number) => {
-    applyGS({currentWave:w, isOpen:false, timerEnd:null})
+    applyGS({currentWave:w, isOpen:false, timerEnd:null, showResults:false})
     notify(`➡ เข้าสู่ Wave ${w}`)
   }
   const startTimer = () => {
     const mins = parseFloat(duration)||10
-    applyGS({isOpen:true, timerEnd:new Date(Date.now()+mins*60000).toISOString(), duration:mins})
+    applyGS({isOpen:true, timerEnd:new Date(Date.now()+mins*60000).toISOString(), duration:mins, showResults:false})
     notify(`▶ เปิดรับข้อมูล ${mins} นาที`)
   }
   const stopTimer = () => { applyGS({isOpen:false}); notify('⏹ ปิดรับข้อมูลแล้ว') }
@@ -376,6 +365,15 @@ function AdminContent() {
                     <button onClick={()=>addTime(5)} className="btn btn-ghost">+5s</button>
                     <button onClick={()=>addTime(60)} className="btn btn-ghost">+1 min</button>
                   </div>
+                  <button
+                    onClick={() => {
+                      applyGS({ showResults: !gs.showResults })
+                      notify(!gs.showResults ? 'Showing player results' : 'Hiding player results')
+                    }}
+                    className={clsx('btn mt-3 w-full', gs.showResults ? 'btn-success' : 'btn-ghost')}
+                  >
+                    {gs.showResults ? 'Hide result' : 'Show result'}
+                  </button>
                 </div>
                 <button onClick={processWave} disabled={processing} className="btn btn-primary w-full">
                   <Zap size={15}/> Refresh Sheet Wave {gs.currentWave}

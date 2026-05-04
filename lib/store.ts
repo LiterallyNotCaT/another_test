@@ -38,7 +38,14 @@ export function subscribeStore(cb: (key: string) => void): () => void {
   return () => { bc?.close(); window.removeEventListener('storage', onStorage); window.removeEventListener('biggame-store', onLocal) }
 }
 
-export const defaultGameState: GameState = { currentWave: 1, isOpen: false, timerEnd: null, duration: 10, gameMode: 'bid' }
+export const defaultGameState: GameState = {
+  currentWave: 1,
+  isOpen: false,
+  timerEnd: null,
+  duration: 10,
+  gameMode: 'bid',
+  showResults: false,
+}
 
 export function getGameState(): GameState {
   return { ...defaultGameState, ...read<Partial<GameState>>(KEY_GAME_STATE, {}) }
@@ -99,6 +106,7 @@ export async function fetchGameStateFromSheet(): Promise<GameState | null> {
       timerEnd: values.get('timerEnd') || null,
       duration: Number.isFinite(duration) && duration > 0 ? duration : defaultGameState.duration,
       gameMode: gameModeRaw === 'bet' ? 'bet' : 'bid',
+      showResults: values.get('showResults') === 'true',
       updatedAt,
     }
   } catch {
@@ -142,7 +150,9 @@ export async function syncGameStateFromCloud(): Promise<GameState | null> {
   if (Number.isFinite(localTime) && (!Number.isFinite(remoteTime) || localTime > remoteTime)) {
     return local
   }
-  write(KEY_GAME_STATE, remote)
+  if (JSON.stringify(remote) !== JSON.stringify(local)) {
+    write(KEY_GAME_STATE, remote)
+  }
   return remote
 }
 
@@ -178,9 +188,14 @@ export async function publishGameStateToSheet(state: GameState = getGameState())
 
 export function startCloudSync(intervalMs = 2000) {
   if (typeof window === 'undefined') return () => {}
+  let inFlight = false
 
   const sync = () => {
-    void syncGameStateFromCloud()
+    if (inFlight) return
+    inFlight = true
+    void syncGameStateFromCloud().finally(() => {
+      inFlight = false
+    })
   }
 
   sync()

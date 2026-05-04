@@ -1,4 +1,5 @@
 'use client'
+import { useEffect, useState } from 'react'
 import clsx from 'clsx'
 import { X, Minus, Plus, ChevronRight } from 'lucide-react'
 import { HOUSE_COLORS, DISASTER_AREAS } from '@/lib/constants'
@@ -40,15 +41,30 @@ export default function BiddingCart({
   const totalBet   = items.reduce((s,i)=>s+i.amount, 0)
   const remaining  = balance - totalBet
   const overBudget = remaining < 0
-  const hasZeroAmount = items.some(i=>i.amount <= 0)
+  const hasInvalidAmount = items.some(i=>i.amount < 100)
   const hasKingBid = items.some(i=>i.area === 'KING')
   const usagePct   = balance > 0 ? Math.min(1, totalBet / balance) : 0
+  const [draftAmounts, setDraftAmounts] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    setDraftAmounts(prev => Object.fromEntries(items.map(i => [i.area, prev[i.area] ?? String(i.amount)])))
+  }, [items])
 
   const updateAmount = (area: string, raw: number) => {
     const prev   = items.find(i=>i.area===area)?.amount || 0
     const maxAdd = remaining + prev
     const val    = maxAdd >= 100 ? Math.min(Math.max(100, isNaN(raw) ? 100 : raw), maxAdd) : 0
     onUpdate(items.map(i => i.area===area ? {...i, amount:val} : i))
+    setDraftAmounts(prevDraft => ({ ...prevDraft, [area]: String(val) }))
+  }
+  const setRawAmount = (area: string, raw: string) => {
+    setDraftAmounts(prevDraft => ({ ...prevDraft, [area]: raw }))
+    const val = Number(raw)
+    onUpdate(items.map(i => i.area===area ? {...i, amount: raw === '' || !Number.isFinite(val) ? 0 : val} : i))
+  }
+  const clampAmount = (area: string) => {
+    const val = Number(draftAmounts[area])
+    updateAmount(area, Number.isFinite(val) ? val : 100)
   }
   const remove = (area: string)  => onUpdate(items.filter(i=>i.area!==area))
   const step   = (area: string, d: number) => {
@@ -133,6 +149,7 @@ export default function BiddingCart({
           <span className="text-label">พื้นที่ที่เลือก <span className="text-blue-500">({items.length})</span></span>
           {items.length > 0 && (
             <button onClick={()=>onUpdate([])}
+              disabled={!isOpen}
               className="text-2xs text-red-500/50 hover:text-red-400 transition-colors font-display">
               ล้างทั้งหมด
             </button>
@@ -191,8 +208,9 @@ export default function BiddingCart({
                       hover:text-white hover:bg-white/8 transition-all disabled:opacity-25 active:scale-90">
                     <Minus size={12} />
                   </button>
-                  <input type="number" value={item.amount} min={100} max={balance} step={100} disabled={!isOpen}
-                    onChange={e=>updateAmount(item.area,parseInt(e.target.value))}
+                  <input type="number" value={draftAmounts[item.area] ?? String(item.amount)} min={100} max={balance} step={100} disabled={!isOpen}
+                    onChange={e=>setRawAmount(item.area,e.target.value)}
+                    onBlur={()=>clampAmount(item.area)}
                     className="flex-1 input-base text-center font-mono text-sm py-2 min-w-0" />
                   <button onClick={()=>step(item.area,100)} disabled={!isOpen||remaining<=0}
                     className="w-8 h-8 rounded-xl glass-light action-pill flex items-center justify-center text-slate-400
@@ -243,19 +261,20 @@ export default function BiddingCart({
 
         {/* Submit */}
         <button onClick={onSubmit}
-          disabled={!isOpen || (items.length===0 && !(isKing && kingDisaster)) || overBudget || hasZeroAmount}
+          disabled={!isOpen || (items.length===0 && !(isKing && kingDisaster)) || overBudget || hasInvalidAmount}
           className={clsx(
             'btn w-full text-sm action-pill',
-            isOpen && (items.length>0 || (isKing && kingDisaster)) && !overBudget && !hasZeroAmount
+            isOpen && (items.length>0 || (isKing && kingDisaster)) && !overBudget && !hasInvalidAmount
               ? 'btn-primary'
               : 'opacity-40 cursor-not-allowed bg-slate-800 text-slate-500 border border-transparent'
           )}
-          style={isOpen && (items.length>0 || (isKing && kingDisaster)) && !overBudget && !hasZeroAmount ? {
+          style={isOpen && (items.length>0 || (isKing && kingDisaster)) && !overBudget && !hasInvalidAmount ? {
             background: `linear-gradient(135deg, ${color}, ${color}aa)`,
             boxShadow: `0 0 20px ${color}30`,
           } : undefined}>
           {!isOpen ? '🔒 ปิดรับการลงทุน'
             : overBudget ? '⚠ เงินไม่เพียงพอ'
+            : hasInvalidAmount ? 'ขั้นต่ำ 100 ต่อพื้นที่'
             : items.length===0 && !(isKing && kingDisaster) ? 'เลือกพื้นที่ก่อน'
             : (
               <span className="flex items-center gap-2">

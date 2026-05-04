@@ -2644,6 +2644,8 @@ form .btn.w-full {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  container-type: inline-size;
+  min-width: 0;
 }
 .game-map .toast-lift {
   margin: 0;
@@ -2658,7 +2660,7 @@ form .btn.w-full {
   padding: 8px !important;
   border: 1px solid #d7e0ed;
   border-radius: 16px;
-  overflow: hidden;
+  overflow: visible;
   background: linear-gradient(135deg, rgba(255,247,237,0.92), rgba(239,246,255,0.92) 52%, rgba(240,253,244,0.92));
 }
 .game-map .map-group-card,
@@ -2690,7 +2692,7 @@ form .btn.w-full {
 .game-map .map-group-meta .badge { padding: 2px 6px !important; font-size: 0.48rem !important; }
 .game-map .map-tile-grid,
 .map-unified-board .map-tile-grid {
-  --map-tile-size: clamp(58px, 5.7vw, 86px);
+  --map-tile-size: clamp(42px, calc((100cqw - 172px) / 9), 86px);
   display: grid !important;
   justify-content: start !important;
   gap: 8px !important;
@@ -2747,7 +2749,7 @@ form .btn.w-full {
   border-color: #d69200 !important;
 }
 .game-map .map-tile-king .map-tile-area { color: #744b00 !important; }
-.game-map-compact .map-infographic.map-unified-board { max-height: calc(100vh - 190px); overflow: hidden; }
+.game-map-compact .map-infographic.map-unified-board { max-height: none; overflow: visible; }
 
 /* Bidding side panel */
 .wire-layout-bidding { gap: clamp(14px, 1.6vw, 22px); }
@@ -2806,7 +2808,10 @@ form .btn.w-full {
   .game-map .map-group-card,
   .map-unified-board .map-group-card { grid-template-columns: 1fr !important; align-items: stretch !important; }
   .game-map .map-tile-grid,
-  .map-unified-board .map-tile-grid { grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)) !important; }
+  .map-unified-board .map-tile-grid {
+    --map-tile-size: clamp(34px, calc((100cqw - 40px) / 9), 72px);
+    grid-template-columns: repeat(auto-fit, minmax(var(--map-tile-size), 1fr)) !important;
+  }
   .game-map .map-tile-deluxe,
   .map-unified-board .map-tile-deluxe { aspect-ratio: auto !important; min-height: 44px !important; }
 }

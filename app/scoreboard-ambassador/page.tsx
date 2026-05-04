@@ -11,7 +11,7 @@ import clsx from 'clsx'
 import { Map, History, Trophy } from 'lucide-react'
 import { TOTAL_WAVES } from '@/lib/constants'
 import { AFTERNOON_SCORE_CSV_URL } from '@/lib/scoreboardSources'
-import { getGameState, subscribeStore, getActiveDisasterForWave, syncGameStateFromSheet } from '@/lib/store'
+import { getGameState, subscribeStore, getActiveDisasterForWave, startCloudSync } from '@/lib/store'
 
 const DISASTER_IDS = Array.from({ length: 9 }, (_, i) => i + 1)
 
@@ -33,14 +33,10 @@ function AmbassadorContent() {
   useEffect(()=>{
     if (!isLoaded) return
     const unsub = subscribeStore(()=>{ setGS(getGameState()) })
-    const sync = async () => {
-      const remote = await syncGameStateFromSheet()
-      setGS(remote ?? getGameState())
-    }
-    const poll  = setInterval(sync, 3000)
-    void sync()
-    return ()=>{ unsub(); clearInterval(poll) }
+    return unsub
   }, [isLoaded])
+
+  useEffect(() => startCloudSync(800), [])
 
   if (!isLoaded) return (
     <div className="wire-page-full ambassador-fullscreen">
@@ -86,7 +82,16 @@ function AmbassadorContent() {
                   </button>
                 </div>
 
-                {tab==='map' ? (
+                {!gs.showResults && tab !== 'map' ? (
+                  <div className="ambassador-tab-view result-locked-panel">
+                    <div className="wire-panel colorful-box colorful-box-sky bg-white p-6 text-center">
+                      <div className="text-label">Result hidden</div>
+                      <div className="mt-2 text-sm font-semibold text-slate-700">
+                        Admin has not shown this wave result yet.
+                      </div>
+                    </div>
+                  </div>
+                ) : tab==='map' ? (
                   <div className="ambassador-tab-view ambassador-map-view">
                     <div className="map-wave-filter flex flex-wrap gap-2">
                       {Array.from({length:TOTAL_WAVES},(_,i)=>i+1).map(w=>(
@@ -115,7 +120,7 @@ function AmbassadorContent() {
                   </div>
                 ) : tab==='history' ? (
                   <div className="ambassador-tab-view space-y-3">
-                    <FinanceHistory />
+                    <FinanceHistory showResults={gs.showResults === true} />
                   </div>
                 ) : tab==='ownership' ? (
                   <div className="ambassador-tab-view space-y-3">

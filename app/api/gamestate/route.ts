@@ -14,6 +14,7 @@ const defaultState: GameState = {
   timerEnd: null,
   duration: 10,
   gameMode: 'bid',
+  showResults: false,
 }
 
 function normalizeGameState(value: unknown): GameState {
@@ -30,6 +31,7 @@ function normalizeGameState(value: unknown): GameState {
     timerEnd: typeof state.timerEnd === 'string' && state.timerEnd ? state.timerEnd : null,
     duration: Number.isFinite(duration) && duration > 0 ? duration : defaultState.duration,
     gameMode,
+    showResults: state.showResults === true,
     updatedAt: typeof state.updatedAt === 'string' ? state.updatedAt : undefined,
   }
 }
