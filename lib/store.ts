@@ -10,6 +10,7 @@ const KEY_MAP_OWNERSHIP = 'biggame_map'
 const KEY_DISASTERS     = 'biggame_disasters'
 const STATE_SHEET       = 'GAME_STATE'
 const GAS_URL           = process.env.NEXT_PUBLIC_GAS_URL ?? ''
+const CLOUD_GAME_STATE_URL = '/api/gamestate'
 
 function read<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback
@@ -22,6 +23,7 @@ function read<T>(key: string, fallback: T): T {
 function write(key: string, value: unknown) {
   if (typeof window === 'undefined') return
   localStorage.setItem(key, JSON.stringify(value))
+  window.dispatchEvent(new CustomEvent('biggame-store', { detail: { key } }))
   try { const ch = new BroadcastChannel('biggame'); ch.postMessage({ key }); ch.close() } catch {}
 }
 
@@ -30,8 +32,10 @@ export function subscribeStore(cb: (key: string) => void): () => void {
   let bc: BroadcastChannel | null = null
   try { bc = new BroadcastChannel('biggame'); bc.onmessage = (e) => cb(e.data?.key ?? '') } catch {}
   const onStorage = (e: StorageEvent) => { if (e.key) cb(e.key) }
+  const onLocal = (e: Event) => cb((e as CustomEvent<{ key?: string }>).detail?.key ?? '')
   window.addEventListener('storage', onStorage)
-  return () => { bc?.close(); window.removeEventListener('storage', onStorage) }
+  window.addEventListener('biggame-store', onLocal)
+  return () => { bc?.close(); window.removeEventListener('storage', onStorage); window.removeEventListener('biggame-store', onLocal) }
 }
 
 export const defaultGameState: GameState = { currentWave: 1, isOpen: false, timerEnd: null, duration: 10, gameMode: 'bid' }
@@ -42,7 +46,10 @@ export function getGameState(): GameState {
 export function setGameState(patch: Partial<GameState>, options: { sync?: boolean } = {}) {
   const next = { ...getGameState(), ...patch, updatedAt: new Date().toISOString() }
   write(KEY_GAME_STATE, next)
-  if (options.sync !== false) void publishGameStateToSheet(next)
+  if (options.sync !== false) {
+    void publishGameStateToCloud(next)
+    void publishGameStateToSheet(next)
+  }
 }
 
 function parseGViz(text: string): any[] {
@@ -100,6 +107,9 @@ export async function fetchGameStateFromSheet(): Promise<GameState | null> {
 }
 
 export async function syncGameStateFromSheet(): Promise<GameState | null> {
+  const cloud = await syncGameStateFromCloud()
+  if (cloud) return cloud
+
   const remote = await fetchGameStateFromSheet()
   if (!remote) return null
   const local = getGameState()
@@ -110,6 +120,45 @@ export async function syncGameStateFromSheet(): Promise<GameState | null> {
   }
   write(KEY_GAME_STATE, remote)
   return remote
+}
+
+export async function fetchGameStateFromCloud(): Promise<GameState | null> {
+  if (typeof window === 'undefined') return null
+  try {
+    const res = await fetch(`${CLOUD_GAME_STATE_URL}?t=${Date.now()}`, { cache: 'no-store' })
+    if (!res.ok) return null
+    return { ...defaultGameState, ...(await res.json() as Partial<GameState>) }
+  } catch {
+    return null
+  }
+}
+
+export async function syncGameStateFromCloud(): Promise<GameState | null> {
+  const remote = await fetchGameStateFromCloud()
+  if (!remote) return null
+  const local = getGameState()
+  const remoteTime = sheetTime(remote.updatedAt)
+  const localTime = sheetTime(local.updatedAt)
+  if (Number.isFinite(localTime) && (!Number.isFinite(remoteTime) || localTime > remoteTime)) {
+    return local
+  }
+  write(KEY_GAME_STATE, remote)
+  return remote
+}
+
+export async function publishGameStateToCloud(state: GameState = getGameState()) {
+  if (typeof window === 'undefined') return { ok: false, message: 'Cloud sync is client-only' }
+  try {
+    const res = await fetch(CLOUD_GAME_STATE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state),
+    })
+    if (!res.ok) return { ok: false, message: `Cloud sync failed: ${res.status}` }
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, message: String(e) }
+  }
 }
 
 export async function publishGameStateToSheet(state: GameState = getGameState()) {
@@ -125,6 +174,18 @@ export async function publishGameStateToSheet(state: GameState = getGameState())
   } catch (e) {
     return { ok: false, message: String(e) }
   }
+}
+
+export function startCloudSync(intervalMs = 2000) {
+  if (typeof window === 'undefined') return () => {}
+
+  const sync = () => {
+    void syncGameStateFromCloud()
+  }
+
+  sync()
+  const intervalId = window.setInterval(sync, intervalMs)
+  return () => window.clearInterval(intervalId)
 }
 
 export function getMapOwnership(): Record<string, number> {

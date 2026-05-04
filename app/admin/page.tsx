@@ -18,7 +18,7 @@ import { AFTERNOON_SCORE_CSV_URL } from '@/lib/scoreboardSources'
 import { fetchWaveInputs, type WaveInputRow } from '@/lib/sheets'
 import {
   getGameState, setGameState, getMapOwnership,
-  getActiveDisasterForWave, getSubmissions, getSubmissionsForWave, subscribeStore, syncGameStateFromSheet,
+  getActiveDisasterForWave, getSubmissions, getSubmissionsForWave, subscribeStore, syncGameStateFromSheet, startCloudSync,
 } from '@/lib/store'
 
 function AdminContent() {
@@ -56,6 +56,8 @@ function AdminContent() {
     setSubmissionGame(localState.gameMode === 'bet' ? 'bet' : 'bid')
     setIsLoaded(true)
   }, [])
+
+  useEffect(() => startCloudSync(), [])
 
   // ── Fetch all sheet scores ──────────────────────────────
   const fetchAll = useCallback(async () => {

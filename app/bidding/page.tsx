@@ -11,7 +11,7 @@ import { LogOut, PanelRight, Sparkles } from 'lucide-react'
 import { HOUSE_NAMES, SHEET_ID, getBaanPassword, getWaveSheetQuery } from '@/lib/constants'
 import {
   getGameState, getMapOwnership, saveSubmission, getSubmissionsForBaan,
-  subscribeStore, getActiveDisasterForWave, syncGameStateFromSheet,
+  subscribeStore, getActiveDisasterForWave, syncGameStateFromSheet, startCloudSync,
 } from '@/lib/store'
 import { fetchWaveInfo, writeToSheet } from '@/lib/sheets'
 
@@ -377,6 +377,7 @@ function BiddingGame({ baan }: { baan:number }) {
 export default function BiddingPage() {
   const [baan,     setBaan]     = useState<number|null>(null)
   const [checking, setChecking] = useState(true)
+  useEffect(() => startCloudSync(), [])
   useEffect(()=>{ const s=sessionStorage.getItem('baan_login'); if(s) setBaan(parseInt(s)); setChecking(false) },[])
   if (checking) return (
     <div className="min-h-screen app-shell flex items-center justify-center">
