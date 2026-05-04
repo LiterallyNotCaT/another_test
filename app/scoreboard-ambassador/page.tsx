@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import AuthGuard from '@/components/AuthGuard'
 import HomeButton from '@/components/HomeButton'
 import FinanceHistory from '@/components/FinanceHistory'
+import FullscreenButton from '@/components/FullscreenButton'
 import GameMap from '@/components/GameMap'
 import OwnershipHistory, { useWaveOwnership } from '@/components/OwnershipHistory'
 import SharedScoreboard from '@/components/SharedScoreboard'
@@ -61,7 +62,8 @@ function AmbassadorContent() {
       <main className="wire-scroll ambassador-main">
         <div className="wire-content ambassador-content">
           <section className="wire-layout-two ambassador-tab-layout">
-            <div className="wire-panel wire-panel-soft ambassador-tab-panel">
+            <div id="ambassador-main-fullscreen" className="wire-panel wire-panel-soft ambassador-tab-panel fullscreen-scope">
+              <FullscreenButton targetId="ambassador-main-fullscreen" />
               <div className="wire-panel-body ambassador-tab-body">
                 <div className="ambassador-tabs flex flex-wrap items-center gap-2">
                   <button onClick={()=>setTab('map')}
@@ -102,7 +104,7 @@ function AmbassadorContent() {
                       ))}
                     </div>
                     <GameMap ownership={sheetOwnership.ownership} filterDisaster={filterDis} readOnly
-                      kingDisaster={getActiveDisasterForWave(gs.currentWave)}
+                      kingDisaster={getActiveDisasterForWave(selWave)}
                       compact />
                     <div className="ambassador-filter-row flex flex-wrap gap-2">
                       {DISASTER_IDS.map(id=>(

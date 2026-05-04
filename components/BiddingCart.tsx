@@ -59,8 +59,6 @@ export default function BiddingCart({
   }
   const setRawAmount = (area: string, raw: string) => {
     setDraftAmounts(prevDraft => ({ ...prevDraft, [area]: raw }))
-    const val = Number(raw)
-    onUpdate(items.map(i => i.area===area ? {...i, amount: raw === '' || !Number.isFinite(val) ? 0 : val} : i))
   }
   const clampAmount = (area: string) => {
     const val = Number(draftAmounts[area])
@@ -150,7 +148,12 @@ export default function BiddingCart({
           {items.length > 0 && (
             <button onClick={()=>onUpdate([])}
               disabled={!isOpen}
-              className="text-2xs text-red-500/50 hover:text-red-400 transition-colors font-display">
+              className={clsx(
+                'rounded-lg border px-3 py-1.5 text-2xs font-display font-semibold transition-colors',
+                isOpen
+                  ? 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700'
+                  : 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed',
+              )}>
               ล้างทั้งหมด
             </button>
           )}

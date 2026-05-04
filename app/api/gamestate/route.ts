@@ -7,6 +7,9 @@ import type { GameState } from '@/lib/constants'
 export const runtime = 'nodejs'
 
 const GAME_STATE_KEY = 'cloud_biggame_state'
+let cachedState: GameState | null = null
+let cachedAt = 0
+const GET_CACHE_MS = 350
 
 const defaultState: GameState = {
   currentWave: 1,
@@ -122,18 +125,29 @@ function getRestKvClient() {
 }
 
 async function readGameState() {
+  if (cachedState && Date.now() - cachedAt < GET_CACHE_MS) return cachedState
+
   const restKv = getRestKvClient()
-  if (restKv) return await restKv.get<GameState>(GAME_STATE_KEY)
+  if (restKv) {
+    cachedState = await restKv.get<GameState>(GAME_STATE_KEY)
+    cachedAt = Date.now()
+    return cachedState
+  }
 
   if (process.env.REDIS_URL) {
     const raw = await redisUrlCommand(['GET', GAME_STATE_KEY])
-    return typeof raw === 'string' ? JSON.parse(raw) as GameState : null
+    cachedState = typeof raw === 'string' ? JSON.parse(raw) as GameState : null
+    cachedAt = Date.now()
+    return cachedState
   }
 
   throw new Error('Missing KV_REST_API_URL/KV_REST_API_TOKEN or REDIS_URL')
 }
 
 async function writeGameState(state: GameState) {
+  cachedState = state
+  cachedAt = Date.now()
+
   const restKv = getRestKvClient()
   if (restKv) {
     await restKv.set(GAME_STATE_KEY, state)

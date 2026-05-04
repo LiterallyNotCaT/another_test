@@ -4,6 +4,7 @@ import AuthGuard from '@/components/AuthGuard'
 import HomeButton from '@/components/HomeButton'
 import GameMap from '@/components/GameMap'
 import FinanceHistory from '@/components/FinanceHistory'
+import FullscreenButton from '@/components/FullscreenButton'
 import OwnershipHistory, { useWaveOwnership } from '@/components/OwnershipHistory'
 import SharedScoreboard from '@/components/SharedScoreboard'
 import Timer from '@/components/Timer'
@@ -200,7 +201,8 @@ function AdminContent() {
           )}
 
           <section className="wire-layout-admin">
-            <div className="wire-panel wire-panel-purple wire-main-hero admin-board-scroll">
+            <div id="admin-main-fullscreen" className="wire-panel wire-panel-purple wire-main-hero admin-board-scroll fullscreen-scope">
+              <FullscreenButton targetId="admin-main-fullscreen" />
               <div className="wire-panel-body w-full">
                 <div className="mb-6 flex flex-wrap justify-center gap-2">
                   {([

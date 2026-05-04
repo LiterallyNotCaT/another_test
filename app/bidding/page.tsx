@@ -4,6 +4,7 @@ import HomeButton from '@/components/HomeButton'
 import GameMap from '@/components/GameMap'
 import BiddingCart from '@/components/BiddingCart'
 import FinanceHistory from '@/components/FinanceHistory'
+import FullscreenButton from '@/components/FullscreenButton'
 import { useWaveOwnership } from '@/components/OwnershipHistory'
 import Timer from '@/components/Timer'
 import clsx from 'clsx'
@@ -161,8 +162,12 @@ function BiddingGame({ baan }: { baan:number }) {
   const handleSelect = (area:string)=>{
     if(!gs.isOpen) return
     const alreadySelected = cart.some(i=>i.area===area)
+    if (!alreadySelected && effectiveBalance - totalBet < 100) {
+      setSaveMessage('Balance is still loading or below minimum')
+      return
+    }
     if (!alreadySelected && area !== 'KING' && islandCart.length >= 3) return
-    setCart(prev=>prev.find(i=>i.area===area)?prev.filter(i=>i.area!==area):[...prev,{area,amount:effectiveBalance >= 100 ? 100 : 0}])
+    setCart(prev=>prev.find(i=>i.area===area)?prev.filter(i=>i.area!==area):[...prev,{area,amount:100}])
     setIsSaved(false)
   }
 
@@ -278,7 +283,8 @@ function BiddingGame({ baan }: { baan:number }) {
           </div>
 
           <section className={clsx('wire-layout-bidding', isBetMode && 'wire-layout-bet-only')}>
-            <div className="space-y-3">
+            <div id="bidding-main-fullscreen" className="space-y-3 fullscreen-scope">
+              <FullscreenButton targetId="bidding-main-fullscreen" />
               {!isBetMode && <div className="flex flex-wrap gap-2">
                 <span className={clsx('badge', !isBetMode ? 'badge-blue' : 'badge-green')}>
                   {isBetMode ? 'Bet mode: guess minigame rank' : 'Bid mode: choose up to 3 islands'}
