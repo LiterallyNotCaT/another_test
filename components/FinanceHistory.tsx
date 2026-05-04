@@ -1,11 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import clsx from 'clsx'
 import HistoryPanel from './HistoryPanel'
 import { DISASTER_AREAS, HOUSE_NAMES, SHEET_ID, TOTAL_WAVES, getWaveSheetQuery } from '@/lib/constants'
 import { getGameState, subscribeStore } from '@/lib/store'
-import { fetchMorningScores } from '@/lib/sheets'
 
 type HistoryType = 'income' | 'bet' | 'reward' | 'lose' | 'start' | 'disaster'
 
@@ -58,7 +57,7 @@ const formatPercent = (returnAmount: number, spent: number) => {
   return `${Number.isInteger(pct) ? pct.toFixed(0) : pct.toFixed(1)}%`
 }
 
-export default function FinanceHistory({
+function FinanceHistory({
   initialBaan = null,
   initialWave = 'all',
   lockBaan = false,
@@ -104,26 +103,38 @@ export default function FinanceHistory({
       setBalance(undefined)
       return
     }
+
     setLoading(true)
     try {
       const nextEntries: OrderedHistoryEntry[] = []
-
       let latestBalance: number | undefined
-      const morning = (await fetchMorningScores()).find(row => row.baan === selectedBaan)?.total
-      if (morning != null) {
-        latestBalance = morning
-        nextEntries.push({
-          order: 0,
-          label: 'Morning score',
-          detail: 'Start point before afternoon game',
-          amount: morning,
-          type: morning >= 0 ? 'income' : 'lose',
-        })
-      }
+      let morningAdded = false
+
       for (const wave of wavesToRead) {
         const rows = await fetchSheetRows(getWaveSheetQuery(wave))
         const row = rows.find((r: any) => parseInt(String(r?.c?.[0]?.v ?? '')) === selectedBaan)
         if (!row) continue
+
+        const c = row.c ?? []
+        const read = (idx: number) => c?.[idx]?.v
+        const numberAt = (idx: number) => parseFloat(String(read(idx) ?? 0)) || 0
+        const textAt = (idx: number) => String(read(idx) ?? '').trim()
+        const startingBalance = numberAt(1)
+        const isCurrentWave = wave === currentWave
+        const revealWave = showResults || !isCurrentWave
+
+        if (!morningAdded && wave === 1) {
+          latestBalance = startingBalance
+          nextEntries.push({
+            order: 0,
+            label: 'Morning score',
+            detail: 'Wave 1 starting money from B5:B16',
+            amount: startingBalance,
+            type: startingBalance >= 0 ? 'income' : 'lose',
+          })
+          morningAdded = true
+        }
+
         const waveKing = parseInt(String(rows?.[19]?.c?.[7]?.v ?? ''))
         const kingHouse = isNaN(waveKing) ? null : waveKing
         const waveDisasterRaw = parseInt(String(rows?.[21]?.c?.[7]?.v ?? ''))
@@ -132,28 +143,6 @@ export default function FinanceHistory({
         const winnerRow = rows.find((r: any) => String(r?.c?.[6]?.v ?? '').trim() === '1')
         const winningKingHouse = winnerRow ? parseInt(String(winnerRow?.c?.[0]?.v ?? '')) : null
         const winningKingBid = winnerRow ? parseFloat(String(winnerRow?.c?.[5]?.v ?? 0)) || 0 : 0
-        const c = row.c ?? []
-        const read = (idx: number) => c?.[idx]?.v
-        const numberAt = (idx: number) => parseFloat(String(read(idx) ?? 0)) || 0
-        const textAt = (idx: number) => String(read(idx) ?? '').trim()
-        const startingBalance = numberAt(1)
-        if (showResults) {
-          latestBalance = read(20) != null && String(read(20)).trim() !== ''
-            ? numberAt(20)
-            : startingBalance || latestBalance
-        }
-        if (false && showResults && wave === 1) {
-          const morningScore = numberAt(1)
-          if (morningScore) {
-            nextEntries.push({
-              order: 0,
-              label: 'Morning score',
-              detail: 'เงินตั้งต้นก่อน Bet Wave 1',
-              amount: morningScore,
-              type: morningScore >= 0 ? 'income' : 'lose',
-            })
-          }
-        }
 
         const betHouse = textAt(2)
         const betAmountSheet = numberAt(3)
@@ -163,7 +152,7 @@ export default function FinanceHistory({
             order: wave * 100 + 10,
             wave,
             label: 'Bet',
-            detail: `บ้าน ${betHouse || '-'} · ลง ${betAmountSheet.toLocaleString()}`,
+            detail: `House ${betHouse || '-'} · spent ${betAmountSheet.toLocaleString()}`,
             amount: -betAmountSheet,
             type: 'bet',
           })
@@ -176,7 +165,7 @@ export default function FinanceHistory({
             order: wave * 100 + 20,
             wave,
             label: 'King bid',
-            detail: `ลงประมูล King ${kingAmount.toLocaleString()}`,
+            detail: `King bid ${kingAmount.toLocaleString()}`,
             amount: -kingAmount,
             type: 'bet',
           })
@@ -195,9 +184,12 @@ export default function FinanceHistory({
             islandSpentTotal += spent
           }
           if (area || spent || got) {
-            const status = got <= 0 ? 'lose' : affectedAreas.has(area) ? 'disaster-ed' : 'win'
-            const pct = formatPercent(got, spent)
-            islandReturnLines.push(`${area || '-'}: ${got.toLocaleString()} (${status === 'disaster-ed' ? 'win, disaster-ed' : got > 0 ? `win, ${pct}` : 'lose'})`)
+            const status = got <= 0
+              ? 'lose'
+              : affectedAreas.has(area)
+                ? 'win, but disaster-ed'
+                : `win, ${formatPercent(got, spent)}`
+            islandReturnLines.push(`${area || '-'}: ${got.toLocaleString()} (${status})`)
             islandReturnTotal += got
           }
         })
@@ -211,8 +203,13 @@ export default function FinanceHistory({
             type: 'bet',
           })
         }
-        if (!showResults) {
-          latestBalance = (startingBalance || latestBalance || 0) - betAmountSheet - kingAmount - islandSpentTotal
+
+        if (revealWave) {
+          latestBalance = read(20) != null && String(read(20)).trim() !== ''
+            ? numberAt(20)
+            : startingBalance - betAmountSheet - kingAmount - islandSpentTotal + betReturn + islandReturnTotal
+        } else {
+          latestBalance = startingBalance - betAmountSheet - kingAmount - islandSpentTotal
         }
 
         const extras = [
@@ -220,26 +217,26 @@ export default function FinanceHistory({
           { label: 'MoneyDrop', amount: numberAt(18) },
           { label: 'พลิกเกม', amount: numberAt(19) },
         ].filter(x => x.amount)
-        if (showResults) extras.forEach((x, idx) => nextEntries.push({
+        if (revealWave) extras.forEach((x, idx) => nextEntries.push({
           order: wave * 100 + 40 + idx,
           wave,
           label: x.label,
-          detail: 'ได้เงินจาก Game อื่น',
+          detail: 'Gain from other game',
           amount: x.amount,
           type: x.amount >= 0 ? 'income' : 'lose',
         }))
 
-        if (showResults && (betHouse || betAmountSheet || betReturn)) {
+        if (revealWave && (betHouse || betAmountSheet || betReturn)) {
           nextEntries.push({
             order: wave * 100 + 60,
             wave,
             label: betReturn > 0 ? 'Bet return: win' : 'Bet return: lose',
-            detail: `ได้คืน ${betReturn.toLocaleString()}`,
+            detail: `Return ${betReturn.toLocaleString()}`,
             amount: betReturn,
             type: betReturn > 0 ? 'reward' : 'lose',
           })
         }
-        if (showResults && islandReturnLines.length) {
+        if (revealWave && islandReturnLines.length) {
           nextEntries.push({
             order: wave * 100 + 70,
             wave,
@@ -249,22 +246,22 @@ export default function FinanceHistory({
             type: islandReturnTotal > 0 ? 'income' : 'lose',
           })
         }
-        if (showResults && (kingAmount || kingResult || winningKingHouse)) {
+        if (revealWave && (kingAmount || kingResult || winningKingHouse)) {
           nextEntries.push({
             order: wave * 100 + 80,
             wave,
             label: 'King result',
             detail: kingResult === '1'
-              ? `จะเป็น King ตาต่อไป · winning bid ${winningKingBid.toLocaleString()}`
-              : `ไม่ได้เป็น King${winningKingHouse ? ` · บ้าน ${winningKingHouse} ชนะด้วย ${winningKingBid.toLocaleString()}` : ''}${kingHouse ? ` · King ตานี้ บ้าน ${kingHouse}` : ''}`,
+              ? `Will be next king · winning bid ${winningKingBid.toLocaleString()}`
+              : `Not king${winningKingHouse ? ` · House ${winningKingHouse} won with ${winningKingBid.toLocaleString()}` : ''}${kingHouse ? ` · current king House ${kingHouse}` : ''}`,
             amount: 0,
             type: kingResult === '1' ? 'reward' : 'lose',
           })
         }
-        if (wave === 5) {
+        if (revealWave && wave === 5) {
           const kingFinalBonus = numberAt(21)
           const islandFinalBonus = numberAt(22)
-          if (showResults && kingFinalBonus) {
+          if (kingFinalBonus) {
             nextEntries.push({
               order: wave * 100 + 100,
               wave,
@@ -274,7 +271,7 @@ export default function FinanceHistory({
               type: 'reward',
             })
           }
-          if (showResults && islandFinalBonus) {
+          if (islandFinalBonus) {
             nextEntries.push({
               order: wave * 100 + 110,
               wave,
@@ -296,7 +293,7 @@ export default function FinanceHistory({
     } finally {
       setLoading(false)
     }
-  }, [selectedBaan, wavesToRead, showResults])
+  }, [selectedBaan, wavesToRead, showResults, currentWave])
 
   useEffect(() => {
     refresh()
@@ -308,7 +305,7 @@ export default function FinanceHistory({
     <div className={clsx('finance-history space-y-3', className)}>
       {!showResults && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-          Results are hidden by admin. Balance starts from morning/current wave money and subtracts only submitted spending until results are shown.
+          Current wave results are hidden. Previous waves are shown; current balance uses this wave starting money minus submitted spending.
         </div>
       )}
       {showFilters && (
@@ -354,3 +351,5 @@ export default function FinanceHistory({
     </div>
   )
 }
+
+export default memo(FinanceHistory)

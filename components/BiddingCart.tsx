@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import clsx from 'clsx'
 import { X, Minus, Plus, ChevronRight } from 'lucide-react'
 import { HOUSE_COLORS, DISASTER_AREAS } from '@/lib/constants'
@@ -33,7 +33,7 @@ function getAreaDisasters(area: string): number[] {
   return out
 }
 
-export default function BiddingCart({
+function BiddingCart({
   baan, balance, items, isKing, kingDisaster,
   onUpdate, onKingDisaster, onSubmit, isSaved, savedAt, isOpen,
 }: BiddingCartProps) {
@@ -290,3 +290,5 @@ export default function BiddingCart({
     </div>
   )
 }
+
+export default memo(BiddingCart)

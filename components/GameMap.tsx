@@ -1,4 +1,5 @@
 'use client'
+import { memo } from 'react'
 import clsx from 'clsx'
 import { HOUSE_COLORS, DISASTER_AREAS } from '@/lib/constants'
 
@@ -42,7 +43,7 @@ function getAffected(dn: number | null): Set<string> {
   return s
 }
 
-export default function GameMap({
+function GameMap({
   ownership, selected=[], onSelect, filterDisaster, readOnly, kingDisaster, compact,
 }: MapProps) {
   const filterSet = filterDisaster != null ? getAffected(filterDisaster) : null
@@ -199,3 +200,5 @@ export default function GameMap({
     </div>
   )
 }
+
+export default memo(GameMap)

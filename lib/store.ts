@@ -55,7 +55,6 @@ export function setGameState(patch: Partial<GameState>, options: { sync?: boolea
   write(KEY_GAME_STATE, next)
   if (options.sync !== false) {
     void publishGameStateToCloud(next)
-    void publishGameStateToSheet(next)
   }
 }
 

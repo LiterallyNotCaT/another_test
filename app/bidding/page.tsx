@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import HomeButton from '@/components/HomeButton'
 import GameMap from '@/components/GameMap'
 import BiddingCart from '@/components/BiddingCart'
@@ -98,9 +98,11 @@ function BiddingGame({ baan }: { baan:number }) {
   const [sheetBetSpend, setSheetBetSpend] = useState(0)
   const [isLoaded, setIsLoaded] = useState(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
-  const totalBet = cart.reduce((s,i)=>s+i.amount,0)
-  const islandCart = cart.filter(i => i.area !== 'KING')
-  const kingBid = cart.find(i => i.area === 'KING')
+  const totalBet = useMemo(() => cart.reduce((s,i)=>s+i.amount,0), [cart])
+  const islandCart = useMemo(() => cart.filter(i => i.area !== 'KING'), [cart])
+  const kingBid = useMemo(() => cart.find(i => i.area === 'KING'), [cart])
+  const selectedAreaKey = cart.map(i => i.area).join('|')
+  const selectedAreas = useMemo(() => selectedAreaKey ? selectedAreaKey.split('|') : [], [selectedAreaKey])
   const kingBidAmount = kingBid?.amount || 0
   const betSpend = parseFloat(betAmount) || 0
   const betAmountNumber = betAmount.trim() === '' ? NaN : Number(betAmount)
@@ -171,6 +173,18 @@ function BiddingGame({ baan }: { baan:number }) {
     setCart(prev=>prev.find(i=>i.area===area)?prev.filter(i=>i.area!==area):[...prev,{area,amount:100}])
     setIsSaved(false)
   }
+
+  const handleCartUpdate = useCallback((items: CartItem[]) => {
+    if (!getGameState().isOpen) return
+    setCart([...items.filter(x=>x.area !== 'KING').slice(0,3), ...items.filter(x=>x.area === 'KING').slice(0,1)])
+    setIsSaved(false)
+  }, [])
+
+  const handleKingDisasterUpdate = useCallback((disaster: number | null) => {
+    if (!getGameState().isOpen) return
+    setKingDis(disaster)
+    setIsSaved(false)
+  }, [])
 
   /* save — local store + write to Google Sheet */
   const handleSave = useCallback(async ()=>{
@@ -347,7 +361,7 @@ function BiddingGame({ baan }: { baan:number }) {
                       )}
                     </div>
                   ) : (
-                    <GameMap ownership={sheetOwnership.ownership} selected={cart.map(i=>i.area)}
+                    <GameMap ownership={sheetOwnership.ownership} selected={selectedAreas}
                       onSelect={handleSelect} filterDisaster={filterDis}
                       readOnly={!gs.isOpen}
                       kingDisaster={getActiveDisasterForWave(gs.currentWave)}
@@ -373,8 +387,8 @@ function BiddingGame({ baan }: { baan:number }) {
                 <div className="wire-section-title">พื้นที่ที่เลือก</div>
                 <BiddingCart baan={baan} balance={effectiveBalance} items={cart} isKing={canChooseKingDisaster}
                   kingDisaster={kingDis}
-                  onUpdate={i=>{if(!gs.isOpen)return;setCart([...i.filter(x=>x.area !== 'KING').slice(0,3), ...i.filter(x=>x.area === 'KING').slice(0,1)]);setIsSaved(false)}}
-                  onKingDisaster={d=>{if(!gs.isOpen)return;setKingDis(d);setIsSaved(false)}}
+                  onUpdate={handleCartUpdate}
+                  onKingDisaster={handleKingDisasterUpdate}
                   onSubmit={handleSave} isSaved={isSaved} savedAt={savedAt} isOpen={gs.isOpen} />
                 <div className="wire-section-title bg-blue-500 text-white">
                   {isSaved?(savedAt?`Saved at ${savedAt}`:'Saved'):'Unsaved / autosave in 5s'}

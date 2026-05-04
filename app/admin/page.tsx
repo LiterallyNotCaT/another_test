@@ -306,7 +306,7 @@ function AdminContent() {
 
                 {tab==='history' && (
                   <div className="wire-panel bg-white p-4 admin-history-panel">
-                    <FinanceHistory />
+                    <FinanceHistory showResults />
                   </div>
                 )}
 
