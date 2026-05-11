@@ -24,6 +24,7 @@ import {
 
 function AdminContent() {
   const [gs,          setGS]          = useState(getGameState)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [ownership,   setOwnership]   = useState(getMapOwnership)
   const [tab,         setTab]         = useState<'dashboard'|'map'|'history'|'ownership'|'leaderboard'>('dashboard')
   const [mapWave,     setMapWave]     = useState(getGameState().currentWave)
@@ -31,7 +32,7 @@ function AdminContent() {
   const [submissionGame, setSubmissionGame] = useState<'bid'|'bet'>(getGameState().gameMode === 'bet' ? 'bet' : 'bid')
   const [sheetInputs, setSheetInputs] = useState<Record<number, WaveInputRow[]>>({})
   const [savePulses,  setSavePulses]  = useState<Record<number, { count: number; at: number }>>({})
-  const [nowTick,     setNowTick]     = useState(Date.now())
+  const [nowTick,     setNowTick]     = useState(() => Date.now())
   const filterDis = null
   const [toast,       setToast]       = useState<{msg:string;type:'ok'|'warn'|'err'}>()
   const [duration,    setDuration]    = useState('10')
@@ -49,13 +50,16 @@ function AdminContent() {
   }
 
   useEffect(() => {
-    const localState = getGameState()
-    setGS(localState)
-    setOwnership(getMapOwnership())
-    setMapWave(localState.currentWave)
-    setSubmissionWave(localState.currentWave)
-    setSubmissionGame(localState.gameMode === 'bet' ? 'bet' : 'bid')
-    setIsLoaded(true)
+    const timer = window.setTimeout(() => {
+      const localState = getGameState()
+      setGS(localState)
+      setOwnership(getMapOwnership())
+      setMapWave(localState.currentWave)
+      setSubmissionWave(localState.currentWave)
+      setSubmissionGame(localState.gameMode === 'bet' ? 'bet' : 'bid')
+      setIsLoaded(true)
+    }, 0)
+    return () => window.clearTimeout(timer)
   }, [])
 
   useEffect(() => startCloudSync(800), [])
@@ -124,9 +128,12 @@ function AdminContent() {
   }, [])
 
   useEffect(() => {
-    setMapWave(gs.currentWave)
-    setSubmissionWave(gs.currentWave)
-    setSubmissionGame(gs.gameMode === 'bet' ? 'bet' : 'bid')
+    const timer = window.setTimeout(() => {
+      setMapWave(gs.currentWave)
+      setSubmissionWave(gs.currentWave)
+      setSubmissionGame(gs.gameMode === 'bet' ? 'bet' : 'bid')
+    }, 0)
+    return () => window.clearTimeout(timer)
   }, [gs.currentWave, gs.gameMode])
 
   useEffect(() => {

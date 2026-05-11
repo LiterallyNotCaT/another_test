@@ -82,6 +82,7 @@ interface CartItem { area:string; amount:number }
 
 function BiddingGame({ baan }: { baan:number }) {
   const [gs,        setGS]        = useState(getGameState)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [ownership, setOwnership] = useState(getMapOwnership)
   const [cart,      setCart]      = useState<CartItem[]>([])
   const [kingDis,   setKingDis]   = useState<number|null>(null)
@@ -115,9 +116,12 @@ function BiddingGame({ baan }: { baan:number }) {
   const sheetOwnership = useWaveOwnership(gs.currentWave)
 
   useEffect(() => {
-    setGS(getGameState())
-    setOwnership(getMapOwnership())
-    setIsLoaded(true)
+    const timer = window.setTimeout(() => {
+      setGS(getGameState())
+      setOwnership(getMapOwnership())
+      setIsLoaded(true)
+    }, 0)
+    return () => window.clearTimeout(timer)
   }, [])
 
   /* fetch balance from Wave sheet */
@@ -128,7 +132,9 @@ function BiddingGame({ baan }: { baan:number }) {
       const text = await (await fetch(url,{cache:'no-store'})).text()
       const js   = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/)?.[1]
       if(!js) return
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rows:any[] = JSON.parse(js)?.table?.rows??[]
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const row = rows.find((r:any)=>parseInt(String(r?.c?.[0]?.v??''))===baan)
       if(row){
         const startingBalance = parseFloat(String(row?.c?.[1]?.v??0))||0
@@ -140,7 +146,11 @@ function BiddingGame({ baan }: { baan:number }) {
     }catch(e){console.error(e)}
   },[baan])
 
-  useEffect(()=>{ fetchBalance(); const t=setInterval(fetchBalance,20000); return()=>clearInterval(t) },[fetchBalance])
+  useEffect(() => {
+    const timer = window.setTimeout(fetchBalance, 0)
+    const t = setInterval(fetchBalance, 20000)
+    return () => { window.clearTimeout(timer); clearInterval(t) }
+  }, [fetchBalance])
 
   const fetchKingInfo = useCallback(async () => {
     try {
@@ -151,8 +161,16 @@ function BiddingGame({ baan }: { baan:number }) {
     } catch(e) { console.error(e) }
   }, [baan])
 
-  useEffect(()=>{ fetchKingInfo(); const t=setInterval(fetchKingInfo,20000); return()=>clearInterval(t) },[fetchKingInfo])
-  useEffect(()=>{ void fetchKingInfo() },[fetchKingInfo, gs.currentWave])
+  useEffect(() => {
+    const timer = window.setTimeout(fetchKingInfo, 0)
+    const t = setInterval(fetchKingInfo, 20000)
+    return () => { window.clearTimeout(timer); clearInterval(t) }
+  }, [fetchKingInfo])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void fetchKingInfo() }, 0)
+    return () => window.clearTimeout(timer)
+  }, [fetchKingInfo, gs.currentWave])
 
   /* subscribe store */
   useEffect(()=>{
@@ -237,10 +255,13 @@ function BiddingGame({ baan }: { baan:number }) {
       return
     }
     if(cart.length===0&&isSaved) return
-    setIsSaved(false); clearTimeout(saveTimer.current)
-    saveTimer.current=setTimeout(handleSave,5000)
-    return()=>clearTimeout(saveTimer.current)
-  },[cart,kingDis,gs.isOpen]) // eslint-disable-line
+    const timer = window.setTimeout(() => {
+      setIsSaved(false)
+      clearTimeout(saveTimer.current)
+      saveTimer.current=setTimeout(handleSave,5000)
+    }, 0)
+    return()=>{ window.clearTimeout(timer); clearTimeout(saveTimer.current) }
+  },[cart,kingDis,gs.isOpen,handleSave,isSaved])
 
   const normalizeBetAmount = () => {
     if (betAmount.trim() === '') return
@@ -414,7 +435,14 @@ export default function BiddingPage() {
   const [baan,     setBaan]     = useState<number|null>(null)
   const [checking, setChecking] = useState(true)
   useEffect(() => startCloudSync(800), [])
-  useEffect(()=>{ const s=sessionStorage.getItem('baan_login'); if(s) setBaan(parseInt(s)); setChecking(false) },[])
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const s = sessionStorage.getItem('baan_login')
+      if (s) setBaan(parseInt(s))
+      setChecking(false)
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [])
   if (checking) return (
     <div className="min-h-screen app-shell flex items-center justify-center">
       <div className="w-8 h-8 border-2 border-cyan-300 border-t-transparent rounded-full animate-spin shadow-[0_0_26px_rgba(34,211,238,0.55)]" />
