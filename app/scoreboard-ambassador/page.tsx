@@ -25,13 +25,10 @@ function AmbassadorContent() {
   const sheetOwnership = useWaveOwnership(selWave)
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const localState = getGameState()
-      setGS(localState)
-      setSelWave(localState.currentWave)
-      setIsLoaded(true)
-    }, 0)
-    return () => window.clearTimeout(timer)
+    const localState = getGameState()
+    setGS(localState)
+    setSelWave(localState.currentWave)
+    setIsLoaded(true)
   }, [])
 
   useEffect(()=>{
