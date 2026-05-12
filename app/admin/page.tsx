@@ -18,25 +18,23 @@ import { HOUSE_COLORS, HOUSE_NAMES, SHEET_BASE, TOTAL_WAVES } from '@/lib/consta
 import { AFTERNOON_SCORE_CSV_URL } from '@/lib/scoreboardSources'
 import { fetchWaveInputs, type WaveInputRow } from '@/lib/sheets'
 import {
-  getGameState, setGameState, getMapOwnership,
+  getGameState, setGameState,
   getActiveDisasterForWave, getSubmissions, getSubmissionsForWave, subscribeStore, startCloudSync,
 } from '@/lib/store'
 
 function AdminContent() {
-  const [gs,          setGS]          = useState(getGameState)
-  const [ownership,   setOwnership]   = useState(getMapOwnership)
+  const [gs,          setGS]          = useState(getGameState())
   const [tab,         setTab]         = useState<'dashboard'|'map'|'history'|'ownership'|'leaderboard'>('dashboard')
   const [mapWave,     setMapWave]     = useState(getGameState().currentWave)
   const [submissionWave, setSubmissionWave] = useState(getGameState().currentWave)
   const [submissionGame, setSubmissionGame] = useState<'bid'|'bet'>(getGameState().gameMode === 'bet' ? 'bet' : 'bid')
   const [sheetInputs, setSheetInputs] = useState<Record<number, WaveInputRow[]>>({})
   const [savePulses,  setSavePulses]  = useState<Record<number, { count: number; at: number }>>({})
-  const [nowTick,     setNowTick]     = useState(Date.now())
+  const [nowTick,     setNowTick]     = useState(() => Date.now())
   const filterDis = null
   const [toast,       setToast]       = useState<{msg:string;type:'ok'|'warn'|'err'}>()
   const [duration,    setDuration]    = useState('10')
   const [processing,  setProcessing]  = useState(false)
-  const [isLoaded,    setIsLoaded]    = useState(false)
   const submissionSnapshotRef = useRef<Record<string, number>>({})
   const sheetOwnership = useWaveOwnership(mapWave)
 
@@ -47,16 +45,6 @@ function AdminContent() {
   const applyGS = (patch: Parameters<typeof setGameState>[0]) => {
     setGameState(patch); setGS(getGameState())
   }
-
-  useEffect(() => {
-    const localState = getGameState()
-    setGS(localState)
-    setOwnership(getMapOwnership())
-    setMapWave(localState.currentWave)
-    setSubmissionWave(localState.currentWave)
-    setSubmissionGame(localState.gameMode === 'bet' ? 'bet' : 'bid')
-    setIsLoaded(true)
-  }, [])
 
   useEffect(() => startCloudSync(800), [])
 
@@ -79,11 +67,9 @@ function AdminContent() {
   },[fetchAll])
 
   useEffect(()=>{
-    if (!isLoaded) return
     const u=subscribeStore((key)=>{
       const nextState = getGameState()
       setGS(nextState)
-      setOwnership(getMapOwnership())
       if (key === 'biggame_submissions') {
         const current = getSubmissionsForWave(nextState.currentWave)
         const snapshot = submissionSnapshotRef.current
@@ -110,7 +96,7 @@ function AdminContent() {
       }
     })
     return u
-  },[isLoaded])
+  },[])
 
   useEffect(() => {
     submissionSnapshotRef.current = Object.fromEntries(
@@ -122,12 +108,6 @@ function AdminContent() {
     const t = window.setInterval(() => setNowTick(Date.now()), 1000)
     return () => window.clearInterval(t)
   }, [])
-
-  useEffect(() => {
-    setMapWave(gs.currentWave)
-    setSubmissionWave(gs.currentWave)
-    setSubmissionGame(gs.gameMode === 'bet' ? 'bet' : 'bid')
-  }, [gs.currentWave, gs.gameMode])
 
   useEffect(() => {
     if (!gs.isOpen || !gs.timerEnd) return
@@ -171,14 +151,6 @@ function AdminContent() {
     : toast?.type==='warn'
     ? 'border-yellow-500/30 bg-yellow-950/60'
     : 'border-emerald-500/30 bg-emerald-950/60'
-
-  if (!isLoaded) return (
-    <div className="wire-page-full">
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="h-9 w-9 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
-      </div>
-    </div>
-  )
 
   return (
     <div className="wire-page-full">

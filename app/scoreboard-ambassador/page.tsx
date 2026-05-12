@@ -18,18 +18,11 @@ const DISASTER_IDS = Array.from({ length: 9 }, (_, i) => i + 1)
 
 function AmbassadorContent() {
   const [tab,         setTab]         = useState<'map'|'history'|'ownership'|'scoreboard'>('map')
-  const [selWave,     setSelWave]     = useState(1)
+  const [selWave,     setSelWave]     = useState(() => getGameState().currentWave)
   const [filterDis,   setFilterDis]   = useState<number|null>(null)
   const [gs,          setGS]          = useState(getGameState)
-  const [isLoaded,    setIsLoaded]    = useState(false)
+  const [isLoaded]                    = useState(true)
   const sheetOwnership = useWaveOwnership(selWave)
-
-  useEffect(() => {
-    const localState = getGameState()
-    setGS(localState)
-    setSelWave(localState.currentWave)
-    setIsLoaded(true)
-  }, [])
 
   useEffect(()=>{
     if (!isLoaded) return

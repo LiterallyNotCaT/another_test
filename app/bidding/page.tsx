@@ -11,7 +11,7 @@ import clsx from 'clsx'
 import { LogOut, PanelRight, Sparkles } from 'lucide-react'
 import { HOUSE_NAMES, SHEET_ID, getBaanPassword, getWaveSheetQuery } from '@/lib/constants'
 import {
-  getGameState, getMapOwnership, saveSubmission, getSubmissionsForBaan,
+  getGameState, saveSubmission, getSubmissionsForBaan,
   subscribeStore, getActiveDisasterForWave, startCloudSync,
 } from '@/lib/store'
 import { fetchWaveInfo, writeToSheet } from '@/lib/sheets'
@@ -79,10 +79,11 @@ function BaanLogin({ onLogin }: { onLogin:(b:number)=>void }) {
 
 /* ── Game screen ───────────────────────────────────────────── */
 interface CartItem { area:string; amount:number }
+type GoogleSheetCell = { v?: string | number | null } | null
+type GoogleSheetRow = { c?: GoogleSheetCell[] }
 
 function BiddingGame({ baan }: { baan:number }) {
   const [gs,        setGS]        = useState(getGameState)
-  const [ownership, setOwnership] = useState(getMapOwnership)
   const [cart,      setCart]      = useState<CartItem[]>([])
   const [kingDis,   setKingDis]   = useState<number|null>(null)
   const [filterDis, setFilterDis] = useState<number|null>(null)
@@ -96,7 +97,7 @@ function BiddingGame({ baan }: { baan:number }) {
   const [betTarget, setBetTarget] = useState('')
   const [betAmount, setBetAmount] = useState('')
   const [sheetBetSpend, setSheetBetSpend] = useState(0)
-  const [isLoaded, setIsLoaded] = useState(false)
+  const [isLoaded] = useState(true)
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const totalBet = useMemo(() => cart.reduce((s,i)=>s+i.amount,0), [cart])
   const islandCart = useMemo(() => cart.filter(i => i.area !== 'KING'), [cart])
@@ -114,12 +115,6 @@ function BiddingGame({ baan }: { baan:number }) {
   const canChooseKingDisaster = isKing || currentKing === baan
   const sheetOwnership = useWaveOwnership(gs.currentWave)
 
-  useEffect(() => {
-    setGS(getGameState())
-    setOwnership(getMapOwnership())
-    setIsLoaded(true)
-  }, [])
-
   /* fetch balance from Wave sheet */
   const fetchBalance = useCallback(async()=>{
     try {
@@ -128,8 +123,8 @@ function BiddingGame({ baan }: { baan:number }) {
       const text = await (await fetch(url,{cache:'no-store'})).text()
       const js   = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/)?.[1]
       if(!js) return
-      const rows:any[] = JSON.parse(js)?.table?.rows??[]
-      const row = rows.find((r:any)=>parseInt(String(r?.c?.[0]?.v??''))===baan)
+      const rows = (JSON.parse(js)?.table?.rows??[]) as GoogleSheetRow[]
+      const row = rows.find((r)=>parseInt(String(r?.c?.[0]?.v??''))===baan)
       if(row){
         const startingBalance = parseFloat(String(row?.c?.[1]?.v??0))||0
         setBalance(startingBalance)
@@ -140,7 +135,12 @@ function BiddingGame({ baan }: { baan:number }) {
     }catch(e){console.error(e)}
   },[baan])
 
-  useEffect(()=>{ fetchBalance(); const t=setInterval(fetchBalance,20000); return()=>clearInterval(t) },[fetchBalance])
+  useEffect(()=>{
+    const refresh = () => { void fetchBalance() }
+    const initial = setTimeout(refresh, 0)
+    const t=setInterval(refresh,20000)
+    return()=>{ clearTimeout(initial); clearInterval(t) }
+  },[fetchBalance])
 
   const fetchKingInfo = useCallback(async () => {
     try {
@@ -151,13 +151,21 @@ function BiddingGame({ baan }: { baan:number }) {
     } catch(e) { console.error(e) }
   }, [baan])
 
-  useEffect(()=>{ fetchKingInfo(); const t=setInterval(fetchKingInfo,20000); return()=>clearInterval(t) },[fetchKingInfo])
-  useEffect(()=>{ void fetchKingInfo() },[fetchKingInfo, gs.currentWave])
+  useEffect(()=>{
+    const refresh = () => { void fetchKingInfo() }
+    const initial = setTimeout(refresh, 0)
+    const t=setInterval(refresh,20000)
+    return()=>{ clearTimeout(initial); clearInterval(t) }
+  },[fetchKingInfo])
+  useEffect(()=>{
+    const t = setTimeout(() => { void fetchKingInfo() }, 0)
+    return () => clearTimeout(t)
+  },[fetchKingInfo, gs.currentWave])
 
   /* subscribe store */
   useEffect(()=>{
     if (!isLoaded) return
-    const u=subscribeStore(()=>{ setGS(getGameState()); setOwnership(getMapOwnership()) })
+    const u=subscribeStore(()=>{ setGS(getGameState()) })
     return u
   },[isLoaded])
 
@@ -237,9 +245,10 @@ function BiddingGame({ baan }: { baan:number }) {
       return
     }
     if(cart.length===0&&isSaved) return
-    setIsSaved(false); clearTimeout(saveTimer.current)
+    const markUnsaved = setTimeout(() => setIsSaved(false), 0)
+    clearTimeout(saveTimer.current)
     saveTimer.current=setTimeout(handleSave,5000)
-    return()=>clearTimeout(saveTimer.current)
+    return()=>{ clearTimeout(markUnsaved); clearTimeout(saveTimer.current) }
   },[cart,kingDis,gs.isOpen]) // eslint-disable-line
 
   const normalizeBetAmount = () => {
@@ -414,7 +423,14 @@ export default function BiddingPage() {
   const [baan,     setBaan]     = useState<number|null>(null)
   const [checking, setChecking] = useState(true)
   useEffect(() => startCloudSync(800), [])
-  useEffect(()=>{ const s=sessionStorage.getItem('baan_login'); if(s) setBaan(parseInt(s)); setChecking(false) },[])
+  useEffect(()=>{
+    const t = setTimeout(() => {
+      const s=sessionStorage.getItem('baan_login')
+      if(s) setBaan(parseInt(s))
+      setChecking(false)
+    }, 0)
+    return () => clearTimeout(t)
+  },[])
   if (checking) return (
     <div className="min-h-screen app-shell flex items-center justify-center">
       <div className="w-8 h-8 border-2 border-cyan-300 border-t-transparent rounded-full animate-spin shadow-[0_0_26px_rgba(34,211,238,0.55)]" />
