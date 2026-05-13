@@ -3090,6 +3090,93 @@ form .btn.w-full {
   max-height: none !important;
   overflow: visible !important;
 }
+.bidding-result-toast-region {
+  position: fixed;
+  top: 86px;
+  right: clamp(14px, 2.5vw, 32px);
+  z-index: 80;
+  pointer-events: none;
+}
+.bidding-result-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(360px, calc(100vw - 28px));
+  padding: 12px 16px;
+  border: 1px solid rgba(34, 197, 94, 0.28);
+  border-radius: 12px;
+  background: rgba(240, 253, 244, 0.96);
+  color: #14532d;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18);
+  font-weight: 800;
+  line-height: 1.35;
+  opacity: 1;
+  transform: translateY(0);
+  animation: bidding-result-toast-in 180ms ease-out;
+  transition: opacity 900ms ease, transform 900ms ease;
+  will-change: opacity, transform;
+}
+.bidding-result-toast svg {
+  flex: 0 0 auto;
+  color: #16a34a;
+}
+.bidding-result-toast.is-leaving {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+@keyframes bidding-result-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.history-panel-list .history-entry-new-result {
+  --history-highlight-rgb: 34, 197, 94;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(var(--history-highlight-rgb), 0.42) !important;
+  background: rgba(var(--history-highlight-rgb), 0.12) !important;
+  box-shadow: 0 0 0 1px rgba(var(--history-highlight-rgb), 0.16), 0 18px 38px rgba(var(--history-highlight-rgb), 0.18) !important;
+  transition: background 900ms ease, border-color 900ms ease, box-shadow 900ms ease;
+}
+.history-panel-list .history-entry-new-result::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(var(--history-highlight-rgb), 0.22), rgba(var(--history-highlight-rgb), 0.1), transparent 72%);
+  animation: history-new-result-sheen 2.4s ease-out both;
+  transition: opacity 900ms ease;
+}
+.history-panel-list .history-entry-new-result > * {
+  position: relative;
+  z-index: 1;
+}
+.history-panel-list .history-entry-new-result.is-leaving {
+  background: #fff !important;
+  border-color: #d8e5f4 !important;
+  box-shadow: 0 6px 16px rgba(25, 35, 55, 0.045) !important;
+}
+.history-panel-list .history-entry-new-result.is-leaving::before {
+  opacity: 0;
+}
+@keyframes history-new-result-sheen {
+  0% {
+    opacity: 0;
+    transform: translateX(-45%);
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(35%);
+  }
+}
 
 /* Color boxes */
 .colorful-box {

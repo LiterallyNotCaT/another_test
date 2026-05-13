@@ -98,7 +98,12 @@ function BiddingGame({ baan }: { baan:number }) {
   const [betAmount, setBetAmount] = useState('')
   const [sheetBetSpend, setSheetBetSpend] = useState(0)
   const [isLoaded] = useState(true)
+  const [resultToast, setResultToast] = useState<{ wave: number; key: number; leaving?: boolean } | null>(null)
+  const [highlightedResultWave, setHighlightedResultWave] = useState<{ wave: number; leaving?: boolean } | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const historySectionRef = useRef<HTMLElement | null>(null)
+  const previousResultState = useRef<{ wave: number; showResults: boolean } | null>(null)
+  const highlightTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const totalBet = useMemo(() => cart.reduce((s,i)=>s+i.amount,0), [cart])
   const islandCart = useMemo(() => cart.filter(i => i.area !== 'KING'), [cart])
   const kingBid = useMemo(() => cart.find(i => i.area === 'KING'), [cart])
@@ -168,6 +173,55 @@ function BiddingGame({ baan }: { baan:number }) {
     const u=subscribeStore(()=>{ setGS(getGameState()) })
     return u
   },[isLoaded])
+
+  useEffect(() => {
+    const previous = previousResultState.current
+    const showResults = gs.showResults === true
+    const justRevealed = showResults && previous?.showResults === false
+
+    previousResultState.current = { wave: gs.currentWave, showResults }
+
+    if (!justRevealed) return
+
+    const wave = gs.currentWave
+    setResultToast({ wave, key: Date.now() })
+    setHighlightedResultWave({ wave })
+    clearTimeout(highlightTimer.current)
+    highlightTimer.current = setTimeout(() => {
+      setHighlightedResultWave(current => current?.wave === wave ? { ...current, leaving: true } : current)
+    }, 10000)
+    const scrollTimer = setTimeout(() => {
+      historySectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 100)
+
+    return () => clearTimeout(scrollTimer)
+  }, [gs.currentWave, gs.showResults])
+
+  useEffect(() => {
+    if (!resultToast) return
+    const toastKey = resultToast.key
+    const leaveTimer = setTimeout(() => {
+      setResultToast(current => current?.key === toastKey ? { ...current, leaving: true } : current)
+    }, 5000)
+    const removeTimer = setTimeout(() => {
+      setResultToast(current => current?.key === toastKey ? null : current)
+    }, 6100)
+    return () => {
+      clearTimeout(leaveTimer)
+      clearTimeout(removeTimer)
+    }
+  }, [resultToast?.key])
+
+  useEffect(() => () => clearTimeout(highlightTimer.current), [])
+
+  useEffect(() => {
+    if (!highlightedResultWave?.leaving) return
+    const wave = highlightedResultWave.wave
+    const t = setTimeout(() => {
+      setHighlightedResultWave(current => current?.wave === wave ? null : current)
+    }, 900)
+    return () => clearTimeout(t)
+  }, [highlightedResultWave])
 
   /* map select */
   const handleSelect = (area:string)=>{
@@ -271,6 +325,14 @@ function BiddingGame({ baan }: { baan:number }) {
 
   return (
     <div className="wire-page-full">
+      <div className="bidding-result-toast-region" aria-live="polite" aria-atomic="true">
+        {resultToast && (
+          <div key={resultToast.key} className={clsx('bidding-result-toast', resultToast.leaving && 'is-leaving')}>
+            <Sparkles size={18} />
+            <span>ประกาศผลรอบที่ {resultToast.wave} แล้ว</span>
+          </div>
+        )}
+      </div>
       <header className="wire-topbar">
         <div className="flex items-center gap-8">
           <HomeButton className="bg-white/10 border-white/20 text-white hover:text-white" />
@@ -406,7 +468,7 @@ function BiddingGame({ baan }: { baan:number }) {
               </aside>
             )}
           </section>
-          {!isBetMode && <section className="wire-history wire-panel">
+          {!isBetMode && <section ref={historySectionRef} id="history-panel" className="wire-history wire-panel">
             <div className="wire-history-body">
               <FinanceHistory
                 initialBaan={baan}
@@ -414,6 +476,8 @@ function BiddingGame({ baan }: { baan:number }) {
                 showFilters={false}
                 showResults={gs.showResults === true}
                 enableBetReturnRanking
+                highlightedRevealWave={highlightedResultWave?.wave ?? null}
+                isRevealHighlightLeaving={highlightedResultWave?.leaving === true}
               />
             </div>
           </section>}

@@ -17,6 +17,7 @@ interface HistoryEntry {
   type: HistoryType
   timestamp?: string
   betTarget?: number
+  revealResult?: boolean
 }
 
 interface OrderedHistoryEntry extends HistoryEntry {
@@ -38,6 +39,8 @@ interface FinanceHistoryProps {
   showFilters?: boolean
   showResults?: boolean
   enableBetReturnRanking?: boolean
+  highlightedRevealWave?: number | null
+  isRevealHighlightLeaving?: boolean
   className?: string
 }
 
@@ -109,6 +112,8 @@ function FinanceHistory({
   showFilters = true,
   showResults: showResultsOverride,
   enableBetReturnRanking = false,
+  highlightedRevealWave = null,
+  isRevealHighlightLeaving = false,
   className,
 }: FinanceHistoryProps) {
   const [selectedBaan, setSelectedBaan] = useState<number | null>(initialBaan)
@@ -276,6 +281,7 @@ function FinanceHistory({
           detail: 'Gain from other game',
           amount: x.amount,
           type: x.amount >= 0 ? 'income' : 'lose',
+          revealResult: isCurrentWave,
         }))
 
         if (revealWave && (wave === 2 || wave === 4)) {
@@ -287,6 +293,7 @@ function FinanceHistory({
             detail: 'เงินที่ได้จากการเก็บซองคำใบ้',
             amount: ladderAmount,
             type: 'income',
+            revealResult: isCurrentWave,
           })
         }
 
@@ -300,6 +307,7 @@ function FinanceHistory({
             amount: betReturn,
             type: betReturn > 0 ? 'reward' : 'lose',
             betTarget: !isNaN(parsedBetTarget) ? parsedBetTarget : undefined,
+            revealResult: isCurrentWave,
           })
         }
         if (revealWave && islandReturnLines.length) {
@@ -310,6 +318,7 @@ function FinanceHistory({
             detail: islandReturnLines.join('\n'),
             amount: islandReturnTotal,
             type: islandReturnTotal > 0 ? 'income' : 'lose',
+            revealResult: isCurrentWave,
           })
         }
         if (revealWave && (kingAmount || kingResult || winningKingHouse)) {
@@ -322,6 +331,7 @@ function FinanceHistory({
               : `Not king${winningKingHouse ? ` · House ${winningKingHouse} won with ${winningKingBid.toLocaleString()}` : ''}${kingHouse ? ` · current king House ${kingHouse}` : ''}`,
             amount: 0,
             type: kingResult === '1' ? 'reward' : 'lose',
+            revealResult: isCurrentWave,
           })
         }
         if (revealWave && wave === 5) {
@@ -335,6 +345,7 @@ function FinanceHistory({
               detail: 'Wave 5 V column · last king',
               amount: kingFinalBonus,
               type: 'reward',
+              revealResult: isCurrentWave,
             })
           }
           if (islandFinalBonus) {
@@ -345,6 +356,7 @@ function FinanceHistory({
               detail: 'Wave 5 W column · score from owned islands',
               amount: islandFinalBonus,
               type: 'reward',
+              revealResult: isCurrentWave,
             })
           }
         }
@@ -406,7 +418,7 @@ function FinanceHistory({
   const showRankingRewards = rankingKind === 'bet-return'
   const rankingTitle = rankingKind === 'ladder'
     ? 'ประกาศอันดับเงินจากการเล่น "เกมพลิกเกม - บันไดงูพิสดาร"'
-    : 'ประกาศผลการเล่นเกมเดี่ยว (นำมาพิจารณาผลการแทงม้า)'
+    : 'ประกาศผลการเล่นเกมเดี่ยว (นำมาคิดผลการแทงม้า)'
 
   return (
     <div className={clsx('finance-history space-y-3', className)}>
@@ -451,6 +463,8 @@ function FinanceHistory({
           maxHeight="none"
           onBetReturnRankingClick={enableBetReturnRanking ? openMiniGameRanking : undefined}
           onLadderRankingClick={enableBetReturnRanking ? openLadderRanking : undefined}
+          highlightedRevealWave={highlightedRevealWave}
+          isRevealHighlightLeaving={isRevealHighlightLeaving}
         />
       ) : (
         <div className="wire-panel bg-white p-8 text-center text-slate-600">

@@ -1,4 +1,5 @@
 'use client'
+import type { CSSProperties } from 'react'
 import clsx from 'clsx'
 import { HOUSE_COLORS, HOUSE_NAMES } from '@/lib/constants'
 import { TrendingUp, TrendingDown, Target, Star, AlertTriangle, Sunrise } from 'lucide-react'
@@ -11,6 +12,7 @@ interface HistoryEntry {
   type:       'income' | 'bet' | 'reward' | 'lose' | 'start' | 'disaster'
   timestamp?: string
   betTarget?: number
+  revealResult?: boolean
 }
 
 interface HistoryPanelProps {
@@ -22,21 +24,25 @@ interface HistoryPanelProps {
   chronological?: boolean
   onBetReturnRankingClick?: (wave: number, betTarget?: number) => void
   onLadderRankingClick?: (wave: number) => void
+  highlightedRevealWave?: number | null
+  isRevealHighlightLeaving?: boolean
 }
 
 const TYPE_META = {
-  income:   { icon: TrendingUp,    color: 'text-green-400',  bg: 'bg-green-500/10',  sign: '+' },
-  bet:      { icon: Target,        color: 'text-orange-400', bg: 'bg-orange-500/10', sign: '−' },
-  reward:   { icon: Star,          color: 'text-yellow-400', bg: 'bg-yellow-500/10', sign: '+' },
-  lose:     { icon: TrendingDown,  color: 'text-red-400',    bg: 'bg-red-500/10',    sign: '−' },
-  start:    { icon: Sunrise,       color: 'text-blue-400',   bg: 'bg-blue-500/10',   sign: '+' },
-  disaster: { icon: AlertTriangle, color: 'text-red-400',    bg: 'bg-red-500/10',    sign: '−' },
+  income:   { icon: TrendingUp,    color: 'text-green-400',  bg: 'bg-green-500/10',  sign: '+', highlight: '34, 197, 94' },
+  bet:      { icon: Target,        color: 'text-orange-400', bg: 'bg-orange-500/10', sign: '−', highlight: '249, 115, 22' },
+  reward:   { icon: Star,          color: 'text-yellow-400', bg: 'bg-yellow-500/10', sign: '+', highlight: '234, 179, 8' },
+  lose:     { icon: TrendingDown,  color: 'text-red-400',    bg: 'bg-red-500/10',    sign: '−', highlight: '239, 68, 68' },
+  start:    { icon: Sunrise,       color: 'text-blue-400',   bg: 'bg-blue-500/10',   sign: '+', highlight: '59, 130, 246' },
+  disaster: { icon: AlertTriangle, color: 'text-red-400',    bg: 'bg-red-500/10',    sign: '−', highlight: '239, 68, 68' },
 }
 
 export default function HistoryPanel({
   entries, baan, balance, title, maxHeight = '420px', chronological = false,
   onBetReturnRankingClick,
   onLadderRankingClick,
+  highlightedRevealWave = null,
+  isRevealHighlightLeaving = false,
 }: HistoryPanelProps) {
   const color = baan ? HOUSE_COLORS[baan] : '#3b82f6'
 
@@ -110,8 +116,20 @@ export default function HistoryPanel({
                   const isPositive = entry.amount === 0 || ['income','reward','start'].includes(entry.type)
                   const showBetReturnRanking = entry.wave !== undefined && entry.label.startsWith('Bet return')
                   const showLadderRanking = entry.wave !== undefined && entry.label === 'เกมพลิกเกม - บันไดงูพิสดาร'
+                  const isHighlightedReveal = entry.revealResult && entry.wave === highlightedRevealWave
+                  const highlightStyle = isHighlightedReveal
+                    ? { '--history-highlight-rgb': meta.highlight } as CSSProperties
+                    : undefined
                   return (
-                    <div key={i} className="glass-light rounded-xl px-3 py-2.5 flex items-start gap-3">
+                    <div
+                      key={i}
+                      style={highlightStyle}
+                      className={clsx(
+                        'glass-light rounded-xl px-3 py-2.5 flex items-start gap-3',
+                        isHighlightedReveal && 'history-entry-new-result',
+                        isHighlightedReveal && isRevealHighlightLeaving && 'is-leaving',
+                      )}
+                    >
                       {/* Icon */}
                       <div className={clsx('w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5', meta.bg)}>
                         <Icon size={13} className={meta.color} />
