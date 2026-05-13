@@ -150,7 +150,7 @@ export async function fetchWaveInputs(wave: number): Promise<{ rows: WaveInputRo
       const adjustments = [
         { label: 'MiniGame', amount: numberAt(r, 17) },
         { label: 'MoneyDrop', amount: numberAt(r, 18) },
-        { label: 'พลิกเกม', amount: numberAt(r, 19) },
+        { label: 'Event', amount: numberAt(r, 19) },
       ].filter(x => x.amount)
       const betTarget = textAt(r, 2)
       const betAmount = numberAt(r, 3)

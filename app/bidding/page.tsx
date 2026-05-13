@@ -408,7 +408,13 @@ function BiddingGame({ baan }: { baan:number }) {
           </section>
           {!isBetMode && <section className="wire-history wire-panel">
             <div className="wire-history-body">
-              <FinanceHistory initialBaan={baan} lockBaan showFilters={false} showResults={gs.showResults === true} />
+              <FinanceHistory
+                initialBaan={baan}
+                lockBaan
+                showFilters={false}
+                showResults={gs.showResults === true}
+                enableBetReturnRanking
+              />
             </div>
           </section>}
         </div>

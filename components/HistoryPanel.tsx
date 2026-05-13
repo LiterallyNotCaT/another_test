@@ -10,6 +10,7 @@ interface HistoryEntry {
   amount:     number
   type:       'income' | 'bet' | 'reward' | 'lose' | 'start' | 'disaster'
   timestamp?: string
+  betTarget?: number
 }
 
 interface HistoryPanelProps {
@@ -19,6 +20,8 @@ interface HistoryPanelProps {
   title?:     string
   maxHeight?: string
   chronological?: boolean
+  onBetReturnRankingClick?: (wave: number, betTarget?: number) => void
+  onLadderRankingClick?: (wave: number) => void
 }
 
 const TYPE_META = {
@@ -32,6 +35,8 @@ const TYPE_META = {
 
 export default function HistoryPanel({
   entries, baan, balance, title, maxHeight = '420px', chronological = false,
+  onBetReturnRankingClick,
+  onLadderRankingClick,
 }: HistoryPanelProps) {
   const color = baan ? HOUSE_COLORS[baan] : '#3b82f6'
 
@@ -103,6 +108,8 @@ export default function HistoryPanel({
                   const meta = TYPE_META[entry.type]
                   const Icon = meta.icon
                   const isPositive = entry.amount === 0 || ['income','reward','start'].includes(entry.type)
+                  const showBetReturnRanking = entry.wave !== undefined && entry.label.startsWith('Bet return')
+                  const showLadderRanking = entry.wave !== undefined && entry.label === 'เกมพลิกเกม - บันไดงูพิสดาร'
                   return (
                     <div key={i} className="glass-light rounded-xl px-3 py-2.5 flex items-start gap-3">
                       {/* Icon */}
@@ -118,6 +125,24 @@ export default function HistoryPanel({
                         )}
                         {entry.timestamp && (
                           <div className="text-2xs text-slate-700 mt-0.5 font-mono">{entry.timestamp}</div>
+                        )}
+                        {showBetReturnRanking && onBetReturnRankingClick && (
+                          <button
+                            type="button"
+                            onClick={() => onBetReturnRankingClick(entry.wave!, entry.betTarget)}
+                            className="mini-game-ranking-button"
+                          >
+                            ดูอันดับการเล่นเกมเดี่ยว
+                          </button>
+                        )}
+                        {showLadderRanking && onLadderRankingClick && (
+                          <button
+                            type="button"
+                            onClick={() => onLadderRankingClick(entry.wave!)}
+                            className="mini-game-ranking-button"
+                          >
+                            ดูอันดับเงินที่ได้จากเกมบันไดงู
+                          </button>
                         )}
                       </div>
 

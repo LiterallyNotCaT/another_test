@@ -5,6 +5,7 @@ import clsx from 'clsx'
 import HistoryPanel from './HistoryPanel'
 import { DISASTER_AREAS, HOUSE_NAMES, SHEET_ID, TOTAL_WAVES, getWaveSheetQuery } from '@/lib/constants'
 import { getGameState, subscribeStore } from '@/lib/store'
+import { X } from 'lucide-react'
 
 type HistoryType = 'income' | 'bet' | 'reward' | 'lose' | 'start' | 'disaster'
 
@@ -15,11 +16,20 @@ interface HistoryEntry {
   amount: number
   type: HistoryType
   timestamp?: string
+  betTarget?: number
 }
 
 interface OrderedHistoryEntry extends HistoryEntry {
   order: number
 }
+
+interface MiniGameRank {
+  rank: number | null
+  baan: number | null
+  reward: number | null
+}
+
+type RankingModalKind = 'bet-return' | 'ladder'
 
 interface FinanceHistoryProps {
   initialBaan?: number | null
@@ -27,6 +37,7 @@ interface FinanceHistoryProps {
   lockBaan?: boolean
   showFilters?: boolean
   showResults?: boolean
+  enableBetReturnRanking?: boolean
   className?: string
 }
 
@@ -39,6 +50,40 @@ const fetchSheetRows = async (query: string) => {
   const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&${query}`
   const text = await (await fetch(url, { cache: 'no-store' })).text()
   return parseGViz(text)
+}
+
+const fetchMiniGameRanking = async (wave: number): Promise<MiniGameRank[]> => {
+  const query = `${getWaveSheetQuery(wave)}&range=${encodeURIComponent('B20:D31')}`
+  const rows = await fetchSheetRows(query)
+  return Array.from({ length: 12 }, (_, i) => {
+    const baanRaw = rows?.[i]?.c?.[0]?.v
+    const rewardRaw = rows?.[i]?.c?.[2]?.v
+    const baan = parseInt(String(baanRaw ?? ''))
+    const reward = parseFloat(String(rewardRaw ?? ''))
+    return {
+      rank: i + 1,
+      baan: !isNaN(baan) && baan >= 1 && baan <= 12 ? baan : null,
+      reward: Number.isFinite(reward) ? reward : null,
+    }
+  })
+}
+
+const fetchLadderRanking = async (wave: number): Promise<MiniGameRank[]> => {
+  const query = `${getWaveSheetQuery(wave)}&range=${encodeURIComponent('Y20:Y31')}`
+  const rows = await fetchSheetRows(query)
+  return Array.from({ length: 12 }, (_, i) => {
+    const rankRaw = rows?.[i]?.c?.[0]?.v
+    const rank = parseInt(String(rankRaw ?? ''))
+    return {
+      rank: Number.isFinite(rank) ? rank : null,
+      baan: i + 1,
+      reward: null,
+    }
+  }).sort((a, b) => {
+    const rankA = a.rank ?? Number.POSITIVE_INFINITY
+    const rankB = b.rank ?? Number.POSITIVE_INFINITY
+    return rankA - rankB || (a.baan ?? 99) - (b.baan ?? 99)
+  })
 }
 
 const affectedAreasFor = (disaster: number | null) => {
@@ -63,6 +108,7 @@ function FinanceHistory({
   lockBaan = false,
   showFilters = true,
   showResults: showResultsOverride,
+  enableBetReturnRanking = false,
   className,
 }: FinanceHistoryProps) {
   const [selectedBaan, setSelectedBaan] = useState<number | null>(initialBaan)
@@ -73,6 +119,12 @@ function FinanceHistory({
   const [loading, setLoading] = useState(false)
   const [currentWave, setCurrentWave] = useState(getGameState().currentWave)
   const [stateShowResults, setStateShowResults] = useState(getGameState().showResults === true)
+  const [rankingKind, setRankingKind] = useState<RankingModalKind>('bet-return')
+  const [rankingWave, setRankingWave] = useState<number | null>(null)
+  const [rankingBetTarget, setRankingBetTarget] = useState<number | null>(null)
+  const [miniGameRanking, setMiniGameRanking] = useState<MiniGameRank[]>([])
+  const [rankingLoading, setRankingLoading] = useState(false)
+  const [rankingError, setRankingError] = useState('')
   const showResults = showResultsOverride ?? stateShowResults
 
   useEffect(() => setSelectedBaan(initialBaan), [initialBaan])
@@ -215,7 +267,7 @@ function FinanceHistory({
         const extras = [
           { label: 'MiniGame', amount: numberAt(17) },
           { label: 'MoneyDrop', amount: numberAt(18) },
-          { label: 'พลิกเกม', amount: numberAt(19) },
+          { label: 'Event', amount: numberAt(19) },
         ].filter(x => x.amount)
         if (revealWave) extras.forEach((x, idx) => nextEntries.push({
           order: wave * 100 + 40 + idx,
@@ -226,7 +278,20 @@ function FinanceHistory({
           type: x.amount >= 0 ? 'income' : 'lose',
         }))
 
+        if (revealWave && (wave === 2 || wave === 4)) {
+          const ladderAmount = numberAt(24)
+          nextEntries.push({
+            order: wave * 100 + 45,
+            wave,
+            label: 'เกมพลิกเกม - บันไดงูพิสดาร',
+            detail: 'เงินที่ได้จากการเก็บซองคำใบ้',
+            amount: ladderAmount,
+            type: 'income',
+          })
+        }
+
         if (revealWave && (betHouse || betAmountSheet || betReturn)) {
+          const parsedBetTarget = parseInt(betHouse)
           nextEntries.push({
             order: wave * 100 + 60,
             wave,
@@ -234,6 +299,7 @@ function FinanceHistory({
             detail: `Return ${betReturn.toLocaleString()}`,
             amount: betReturn,
             type: betReturn > 0 ? 'reward' : 'lose',
+            betTarget: !isNaN(parsedBetTarget) ? parsedBetTarget : undefined,
           })
         }
         if (revealWave && islandReturnLines.length) {
@@ -301,6 +367,47 @@ function FinanceHistory({
     return () => window.clearInterval(t)
   }, [refresh])
 
+  const openMiniGameRanking = useCallback(async (wave: number, betTarget?: number) => {
+    setRankingKind('bet-return')
+    setRankingWave(wave)
+    setRankingBetTarget(betTarget ?? null)
+    setMiniGameRanking([])
+    setRankingError('')
+    setRankingLoading(true)
+    try {
+      setMiniGameRanking(await fetchMiniGameRanking(wave))
+    } catch (e) {
+      console.error(e)
+      setRankingError('ไม่สามารถโหลดอันดับการเล่นเกมเดี่ยวได้')
+    } finally {
+      setRankingLoading(false)
+    }
+  }, [])
+  const openLadderRanking = useCallback(async (wave: number) => {
+    setRankingKind('ladder')
+    setRankingWave(wave)
+    setRankingBetTarget(null)
+    setMiniGameRanking([])
+    setRankingError('')
+    setRankingLoading(true)
+    try {
+      setMiniGameRanking(await fetchLadderRanking(wave))
+    } catch (e) {
+      console.error(e)
+      setRankingError('ไม่สามารถโหลดอันดับเงินจากเกมบันไดงูได้')
+    } finally {
+      setRankingLoading(false)
+    }
+  }, [])
+  const rankingColumns = [
+    miniGameRanking.slice(0, 6),
+    miniGameRanking.slice(6, 12),
+  ]
+  const showRankingRewards = rankingKind === 'bet-return'
+  const rankingTitle = rankingKind === 'ladder'
+    ? 'ประกาศอันดับเงินจากการเล่น "เกมพลิกเกม - บันไดงูพิสดาร"'
+    : 'ประกาศผลการเล่นเกมเดี่ยว (นำมาพิจารณาผลการแทงม้า)'
+
   return (
     <div className={clsx('finance-history space-y-3', className)}>
       {!showResults && (
@@ -342,10 +449,96 @@ function FinanceHistory({
           balance={balance}
           title="ประวัติการเงิน"
           maxHeight="none"
+          onBetReturnRankingClick={enableBetReturnRanking ? openMiniGameRanking : undefined}
+          onLadderRankingClick={enableBetReturnRanking ? openLadderRanking : undefined}
         />
       ) : (
         <div className="wire-panel bg-white p-8 text-center text-slate-600">
           เลือกบ้านเพื่อดูประวัติการเงิน
+        </div>
+      )}
+
+      {rankingWave !== null && (
+        <div className="mini-game-modal-backdrop">
+          <div className="mini-game-modal-panel">
+            <div className={clsx('mini-game-modal-header', rankingKind === 'ladder' && 'is-ladder')}>
+              <div>
+                <h2 className="mini-game-modal-title">
+                  {rankingTitle}
+                </h2>
+                <p className="mini-game-modal-subtitle">รอบที่ {rankingWave}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setRankingWave(null)
+                  setRankingBetTarget(null)
+                }}
+                className="mini-game-modal-close"
+                aria-label="Close ranking popup"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="mini-game-modal-body">
+              {rankingLoading ? (
+                <div className="mini-game-ranking-state">
+                  กำลังโหลดอันดับ...
+                </div>
+              ) : rankingError ? (
+                <div className="mini-game-ranking-error">
+                  {rankingError}
+                </div>
+              ) : (
+                <div className="mini-game-ranking-columns">
+                  {rankingColumns.map((column, columnIndex) => (
+                    <div key={columnIndex} className="mini-game-ranking-column">
+                      {column.map(row => (
+                        <div
+                          key={`${row.baan ?? 'unknown'}-${row.rank ?? 'blank'}`}
+                          className={clsx(
+                            'mini-game-ranking-row',
+                            !showRankingRewards && 'is-no-reward',
+                            row.rank !== null && row.rank <= 3 && 'is-top-rank',
+                            row.rank === 1 && 'is-rank-1',
+                            row.rank === 2 && 'is-rank-2',
+                            row.rank === 3 && 'is-rank-3',
+                            showRankingRewards && row.baan === rankingBetTarget && 'is-player-bet'
+                          )}
+                        >
+                          <div className="mini-game-ranking-number">{row.rank ?? '-'}</div>
+                          <div className="mini-game-ranking-copy">
+                            <div className="mini-game-ranking-label">อันดับที่ {row.rank ?? '-'}</div>
+                            <div className="mini-game-ranking-house">
+                              {row.baan ? HOUSE_NAMES[row.baan] : '-'}
+                            </div>
+                            {showRankingRewards && row.baan === rankingBetTarget && (
+                              <div className="mini-game-ranking-player-note">บ้านที่คุณแทง</div>
+                            )}
+                          </div>
+                          {showRankingRewards && (
+                            <div className="mini-game-ranking-reward">
+                              <div className="mini-game-ranking-reward-label">ผลตอบแทน</div>
+                              <div
+                                className={clsx(
+                                  'mini-game-ranking-reward-value',
+                                  row.reward !== null && row.reward >= 100 && 'is-reward-good',
+                                  row.reward !== null && row.reward < 99 && 'is-reward-bad'
+                                )}
+                              >
+                                {row.reward !== null ? `${row.reward.toLocaleString()}%` : '-'}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
