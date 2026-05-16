@@ -10,6 +10,7 @@ interface MapProps {
   filterDisaster?: number | null
   readOnly?:       boolean
   kingDisaster?:   number | null
+  kingDisasterTone?: 'selection' | 'result'
   compact?:        boolean
 }
 
@@ -44,7 +45,7 @@ function getAffected(dn: number | null): Set<string> {
 }
 
 function GameMap({
-  ownership, selected=[], onSelect, filterDisaster, readOnly, kingDisaster, compact,
+  ownership, selected=[], onSelect, filterDisaster, readOnly, kingDisaster, kingDisasterTone = 'result', compact,
 }: MapProps) {
   const filterSet = filterDisaster != null ? getAffected(filterDisaster) : null
   const kingSet   = kingDisaster   != null ? getAffected(kingDisaster)   : null
@@ -58,7 +59,7 @@ function GameMap({
     <div className={clsx('game-map select-none', compact ? 'game-map-compact' : 'game-map-regular')}>
       {/* Filter notice */}
       {filterDisaster != null && (
-        <div className="toast-lift flex items-center gap-2 px-3 py-2 rounded-2xl bg-red-950/50 border border-red-400/25 text-xs text-red-300 shadow-[0_18px_45px_rgba(127,29,29,0.22)]">
+        <div className="toast-lift flex items-center gap-2 px-3 py-2 rounded-2xl bg-indigo-950/50 border border-indigo-400/25 text-xs text-indigo-200 shadow-[0_18px_45px_rgba(49,46,129,0.22)]">
           <span className="font-mono font-bold">D{filterDisaster}</span>
           <span>Showing areas affected by disaster {filterDisaster}</span>
         </div>
@@ -118,16 +119,25 @@ function GameMap({
                   const c = HOUSE_COLORS[owner]
                   bg = `${c}1a`; border = `${c}55`; textColor = c
                 }
-                if (isSelected) {
-                  bg = isKingIsland ? 'rgba(245,158,11,0.32)' : 'rgba(245,158,11,0.15)'; border = 'rgba(245,158,11,0.7)'
-                  textColor = '#fbbf24'
-                }
                 if (filterSet != null) {
-                  if (isFiltered)  { bg='rgba(127,29,29,0.4)'; border='rgba(239,68,68,0.6)'; textColor='#fca5a5' }
+                  if (isFiltered)  { bg='rgba(99,102,241,0.22)'; border='rgba(79,70,229,0.62)'; textColor='#3730a3' }
                   if (dimmed)      { bg='rgba(13,17,23,0.5)'; border='rgba(255,255,255,0.03)'; textColor='#1e293b' }
                 }
-                if (isKingHit && !isSelected && !filterSet) {
-                  border = 'rgba(239,68,68,0.45)'
+                if (isKingHit && !filterSet) {
+                  if (kingDisasterTone === 'selection') {
+                    bg = 'rgba(244,114,182,0.32)'
+                    border = 'rgba(219,39,119,0.72)'
+                    textColor = '#9d174d'
+                  } else {
+                    bg = 'rgba(248,113,113,0.22)'
+                    border = 'rgba(239,68,68,0.52)'
+                    textColor = '#991b1b'
+                  }
+                }
+                if (isSelected) {
+                  bg = isKingHit && !filterSet ? bg : isKingIsland ? 'rgba(245,158,11,0.32)' : 'rgba(245,158,11,0.15)'
+                  border = 'rgba(245,158,11,0.86)'
+                  textColor = isKingHit && !filterSet ? textColor : '#92400e'
                 }
 
                 return (
@@ -147,7 +157,9 @@ function GameMap({
                       readOnly && 'cursor-default',
                       isSelected && 'map-tile-selected ring-2 ring-yellow-300/80 ring-offset-2 ring-offset-[#07090f]',
                       isKingIsland && 'map-tile-king',
-                      isKingHit && !isSelected && 'ring-1 ring-red-500/40',
+                      isFiltered && 'map-tile-filter-hit',
+                      isKingHit && !filterSet && kingDisasterTone === 'selection' && 'map-tile-king-hit-selection',
+                      isKingHit && !filterSet && kingDisasterTone === 'result' && 'map-tile-king-hit-result',
                     )}
                     style={{ background: bg, border: `1.5px solid ${border}` }}>
 

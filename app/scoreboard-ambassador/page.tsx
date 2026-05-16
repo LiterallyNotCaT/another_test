@@ -12,7 +12,8 @@ import clsx from 'clsx'
 import { Map, History, Trophy } from 'lucide-react'
 import { TOTAL_WAVES } from '@/lib/constants'
 import { AFTERNOON_SCORE_CSV_URL } from '@/lib/scoreboardSources'
-import { getGameState, subscribeStore, getActiveDisasterForWave, startCloudSync } from '@/lib/store'
+import { getGameState, subscribeStore, getActiveDisasterForWave, setActiveDisaster, startCloudSync } from '@/lib/store'
+import { fetchWaveInfo } from '@/lib/sheets'
 
 const DISASTER_IDS = Array.from({ length: 9 }, (_, i) => i + 1)
 
@@ -31,6 +32,14 @@ function AmbassadorContent() {
   }, [isLoaded])
 
   useEffect(() => startCloudSync(800), [])
+
+  useEffect(() => {
+    let cancelled = false
+    fetchWaveInfo(selWave)
+      .then(info => { if (!cancelled) setActiveDisaster(selWave, info.disaster) })
+      .catch(console.error)
+    return () => { cancelled = true }
+  }, [selWave])
 
   if (!isLoaded) return (
     <div className="wire-page-full ambassador-fullscreen">
@@ -96,8 +105,8 @@ function AmbassadorContent() {
                         </button>
                       ))}
                     </div>
-                    <GameMap ownership={sheetOwnership.ownership} filterDisaster={filterDis} readOnly
-                      kingDisaster={getActiveDisasterForWave(selWave)}
+                    <GameMap ownership={gs.showResults ? sheetOwnership.ownership : {}} filterDisaster={filterDis} readOnly
+                      kingDisaster={gs.showResults ? getActiveDisasterForWave(selWave) : null}
                       compact />
                     <div className="ambassador-filter-row flex flex-wrap gap-2">
                       {DISASTER_IDS.map(id=>(

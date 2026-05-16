@@ -19,8 +19,12 @@ import { AFTERNOON_SCORE_CSV_URL } from '@/lib/scoreboardSources'
 import { fetchWaveInputs, type WaveInputRow } from '@/lib/sheets'
 import {
   getGameState, setGameState,
-  getActiveDisasterForWave, getSubmissions, getSubmissionsForWave, subscribeStore, startCloudSync,
+  getActiveDisasterForWave, setActiveDisaster, getSubmissions, getSubmissionsForWave, subscribeStore, startCloudSync,
 } from '@/lib/store'
+
+const BID_PLAY_MINUTES = 10
+const BET_PLAY_MINUTES = 2
+const DISASTER_SELECT_MINUTES = 3
 
 function AdminContent() {
   const [gs,          setGS]          = useState(getGameState())
@@ -33,7 +37,12 @@ function AdminContent() {
   const [nowTick,     setNowTick]     = useState(() => Date.now())
   const filterDis = null
   const [toast,       setToast]       = useState<{msg:string;type:'ok'|'warn'|'err'}>()
-  const [duration,    setDuration]    = useState('10')
+  const [duration,    setDuration]    = useState(() => {
+    const state = getGameState()
+    if (state.gameMode === 'bet') return String(BET_PLAY_MINUTES)
+    if (state.gamePhase === 'select-disaster') return String(DISASTER_SELECT_MINUTES)
+    return String(BID_PLAY_MINUTES)
+  })
   const [processing,  setProcessing]  = useState(false)
   const submissionSnapshotRef = useRef<Record<string, number>>({})
   const sheetOwnership = useWaveOwnership(mapWave)
@@ -55,6 +64,7 @@ function AdminContent() {
       for (let w=1; w<=TOTAL_WAVES; w++) {
         const data = await fetchWaveInputs(w)
         inputs[w] = data.rows
+        setActiveDisaster(w, data.kingDisaster)
       }
       setSheetInputs(inputs)
     } catch(e){ console.error(e) }
@@ -118,15 +128,39 @@ function AdminContent() {
 
   // ── Controls ────────────────────────────────────────────
   const gotoWave = (w:number) => {
-    applyGS({currentWave:w, isOpen:false, timerEnd:null, showResults:false})
+    applyGS({currentWave:w, isOpen:false, timerEnd:null, showResults:false, gamePhase:'play'})
     notify(`➡ เข้าสู่ Wave ${w}`)
   }
+  const selectBidMode = () => {
+    setDuration(String(BID_PLAY_MINUTES))
+    applyGS({gameMode:'bid', gamePhase:'play', duration:BID_PLAY_MINUTES})
+    notify('Bid game ready: 10 min island + king bid')
+  }
+  const selectBetMode = () => {
+    setDuration(String(BET_PLAY_MINUTES))
+    applyGS({gameMode:'bet', gamePhase:'play', duration:BET_PLAY_MINUTES})
+    notify('Bet game ready: 2 min')
+  }
   const startTimer = () => {
-    const mins = parseFloat(duration)||10
-    applyGS({isOpen:true, timerEnd:new Date(Date.now()+mins*60000).toISOString(), duration:mins, showResults:false})
+    const fallback = gs.gameMode === 'bet' ? BET_PLAY_MINUTES : BID_PLAY_MINUTES
+    const mins = parseFloat(duration)||fallback
+    applyGS({isOpen:true, timerEnd:new Date(Date.now()+mins*60000).toISOString(), duration:mins, showResults:false, gamePhase:'play'})
     notify(`▶ เปิดรับข้อมูล ${mins} นาที`)
   }
   const stopTimer = () => { applyGS({isOpen:false}); notify('⏹ ปิดรับข้อมูลแล้ว') }
+  const startDisasterSelect = () => {
+    const mins = DISASTER_SELECT_MINUTES
+    setDuration(String(mins))
+    applyGS({
+      gameMode:'bid',
+      gamePhase:'select-disaster',
+      isOpen:true,
+      timerEnd:new Date(Date.now()+mins*60000).toISOString(),
+      duration:mins,
+      showResults:false,
+    })
+    notify('Select disaster: current king has 3 min')
+  }
   const addTime = (seconds:number) => {
     const now = new Date().getTime()
     const cur = gs.timerEnd ? new Date(gs.timerEnd).getTime() : now
@@ -311,15 +345,20 @@ function AdminContent() {
                 </div>
                 <div className="admin-control-title">Admin Control</div>
                 <div className="grid grid-cols-2 gap-2">
-                  <button onClick={()=>applyGS({gameMode:'bid'})}
-                    className={clsx('btn', gs.gameMode !== 'bet' ? 'btn-primary' : 'btn-ghost')}>
+                  <button onClick={selectBidMode}
+                    className={clsx('btn', gs.gameMode !== 'bet' && gs.gamePhase !== 'select-disaster' ? 'btn-primary' : 'btn-ghost')}>
                     Bid game
                   </button>
-                  <button onClick={()=>applyGS({gameMode:'bet'})}
+                  <button onClick={selectBetMode}
                     className={clsx('btn', gs.gameMode === 'bet' ? 'btn-primary' : 'btn-ghost')}>
                     Bet game
                   </button>
                 </div>
+                {gs.gameMode === 'bid' && (
+                  <div className={clsx('badge w-full justify-center', gs.gamePhase === 'select-disaster' ? 'badge-gold' : 'badge-blue')}>
+                    {gs.gamePhase === 'select-disaster' ? 'Select disaster - king only' : 'Bid phase - all houses'}
+                  </div>
+                )}
                 <div className="wire-panel admin-wave-card colorful-box colorful-box-sky bg-white p-4">
                   <div className="mb-4 grid grid-cols-[44px_minmax(0,1fr)_44px] items-center gap-2">
                     <button onClick={()=>gs.currentWave>1&&gotoWave(gs.currentWave-1)} className="btn btn-ghost admin-wave-arrow"><ChevronLeft size={18}/></button>
@@ -339,6 +378,14 @@ function AdminContent() {
                     <button onClick={()=>addTime(5)} className="btn btn-ghost">+5s</button>
                     <button onClick={()=>addTime(60)} className="btn btn-ghost">+1 min</button>
                   </div>
+                  {gs.gameMode === 'bid' && (
+                    <button
+                      onClick={startDisasterSelect}
+                      className={clsx('btn mt-3 w-full', gs.gamePhase === 'select-disaster' ? 'btn-success' : 'btn-ghost')}
+                    >
+                      Select disaster (king only, 3 min)
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       applyGS({ showResults: !gs.showResults })

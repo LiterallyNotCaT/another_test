@@ -17,6 +17,7 @@ const defaultState: GameState = {
   timerEnd: null,
   duration: 10,
   gameMode: 'bid',
+  gamePhase: 'play',
   showResults: false,
 }
 
@@ -25,6 +26,7 @@ function normalizeGameState(value: unknown): GameState {
   const currentWave = Number(state.currentWave)
   const duration = Number(state.duration)
   const gameMode = state.gameMode === 'bet' ? 'bet' : 'bid'
+  const gamePhase = state.gamePhase === 'select-disaster' ? 'select-disaster' : 'play'
 
   return {
     ...defaultState,
@@ -34,6 +36,7 @@ function normalizeGameState(value: unknown): GameState {
     timerEnd: typeof state.timerEnd === 'string' && state.timerEnd ? state.timerEnd : null,
     duration: Number.isFinite(duration) && duration > 0 ? duration : defaultState.duration,
     gameMode,
+    gamePhase: gameMode === 'bet' ? 'play' : gamePhase,
     showResults: state.showResults === true,
     updatedAt: typeof state.updatedAt === 'string' ? state.updatedAt : undefined,
   }

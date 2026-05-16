@@ -44,6 +44,7 @@ export const defaultGameState: GameState = {
   timerEnd: null,
   duration: 10,
   gameMode: 'bid',
+  gamePhase: 'play',
   showResults: false,
 }
 
@@ -97,6 +98,7 @@ export async function fetchGameStateFromSheet(): Promise<GameState | null> {
     const currentWave = parseInt(values.get('currentWave') ?? '')
     const duration = parseFloat(values.get('duration') ?? '')
     const gameModeRaw = values.get('gameMode')
+    const gamePhaseRaw = values.get('gamePhase')
     const updatedAt = values.get('updatedAt') || undefined
     if (!currentWave || currentWave < 1 || currentWave > 5) return null
     return {
@@ -105,6 +107,7 @@ export async function fetchGameStateFromSheet(): Promise<GameState | null> {
       timerEnd: values.get('timerEnd') || null,
       duration: Number.isFinite(duration) && duration > 0 ? duration : defaultGameState.duration,
       gameMode: gameModeRaw === 'bet' ? 'bet' : 'bid',
+      gamePhase: gamePhaseRaw === 'select-disaster' ? 'select-disaster' : 'play',
       showResults: values.get('showResults') === 'true',
       updatedAt,
     }

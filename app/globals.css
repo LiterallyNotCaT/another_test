@@ -2536,6 +2536,15 @@ form .btn.w-full {
   color: #5b6b82;
 }
 .history-panel-list .font-mono.font-bold { font-size: clamp(0.82rem, 1vw, 0.95rem); }
+.history-panel-list .history-entry-amount {
+  min-width: 5.5rem;
+  text-align: right;
+  font-size: clamp(1.05rem, 1.35vw, 1.32rem) !important;
+  line-height: 1.05;
+}
+.history-panel-list .history-entry-amount.is-gain { color: #15803d !important; }
+.history-panel-list .history-entry-amount.is-loss { color: #dc2626 !important; }
+.history-panel-list .history-entry-amount.is-zero { color: #111827 !important; }
 .mini-game-ranking-button {
   display: inline-flex !important;
   align-items: center !important;
@@ -2993,7 +3002,7 @@ form .btn.w-full {
 .game-map .map-group-meta .badge { padding: 2px 4px !important; font-size: 0.42rem !important; white-space: nowrap !important; }
 .game-map .map-tile-grid,
 .map-unified-board .map-tile-grid {
-  --map-tile-size: clamp(36px, min(calc((100cqw - 168px) / 9), calc((100svh - 330px) / 4.2)), 72px);
+  --map-tile-size: clamp(42px, min(calc((100cqw - 168px) / 9), calc((100svh - 330px) / 4.2)), 72px);
   display: grid !important;
   justify-content: start !important;
   gap: 6px !important;
@@ -3050,6 +3059,24 @@ form .btn.w-full {
   border-color: #d69200 !important;
 }
 .game-map .map-tile-king .map-tile-area { color: #744b00 !important; }
+.game-map .map-tile-filter-hit {
+  box-shadow: inset 0 0 0 1px rgba(99,102,241,0.2), 0 8px 18px rgba(79,70,229,0.12) !important;
+}
+.game-map .map-tile-king-hit-selection {
+  box-shadow: inset 0 0 0 1px rgba(244,114,182,0.22), 0 10px 22px rgba(219,39,119,0.16) !important;
+}
+.game-map .map-tile-king-hit-result {
+  box-shadow: inset 0 0 0 1px rgba(248,113,113,0.18), 0 8px 18px rgba(239,68,68,0.12) !important;
+}
+.game-map .map-tile-owner {
+  min-height: 13px;
+  padding: 1px 4px !important;
+}
+.game-map .map-tile-disasters { bottom: 2px; }
+.game-map .map-tile-disasters span {
+  padding: 0 3px !important;
+  line-height: 1.05 !important;
+}
 .game-map-compact .map-infographic.map-unified-board { max-height: none; overflow: visible; }
 .game-map-compact .map-group-card,
 .game-map-compact.map-unified-board .map-group-card {
@@ -3201,7 +3228,7 @@ form .btn.w-full {
   .map-unified-board .map-group-card { grid-template-columns: 1fr !important; align-items: stretch !important; }
   .game-map .map-tile-grid,
   .map-unified-board .map-tile-grid {
-    --map-tile-size: clamp(34px, calc((100cqw - 40px) / 9), 72px);
+    --map-tile-size: clamp(38px, calc((100cqw - 40px) / 9), 72px);
     grid-template-columns: repeat(auto-fit, minmax(var(--map-tile-size), 1fr)) !important;
   }
   .game-map .map-tile-deluxe,

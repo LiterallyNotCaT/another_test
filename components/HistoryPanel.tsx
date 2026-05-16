@@ -13,6 +13,7 @@ interface HistoryEntry {
   timestamp?: string
   betTarget?: number
   revealResult?: boolean
+  hideAmount?: boolean
 }
 
 interface HistoryPanelProps {
@@ -113,9 +114,12 @@ export default function HistoryPanel({
                 {(chronological ? groupEntries : [...groupEntries].reverse()).map((entry, i) => {
                   const meta = TYPE_META[entry.type]
                   const Icon = meta.icon
-                  const isPositive = entry.amount === 0 || ['income','reward','start'].includes(entry.type)
+                  const amountTone = entry.amount > 0 ? 'is-gain' : entry.amount < 0 ? 'is-loss' : 'is-zero'
                   const showBetReturnRanking = entry.wave !== undefined && entry.label.startsWith('Bet return')
-                  const showLadderRanking = entry.wave !== undefined && entry.label === 'เกมพลิกเกม - บันไดงูพิสดาร'
+                  const showLadderRanking = entry.wave !== undefined && (
+                    entry.label === 'บันไดงู' ||
+                    entry.label === 'เกมพลิกเกม - บันไดงูพิสดาร'
+                  )
                   const isHighlightedReveal = entry.revealResult && entry.wave === highlightedRevealWave
                   const highlightStyle = isHighlightedReveal
                     ? { '--history-highlight-rgb': meta.highlight } as CSSProperties
@@ -165,9 +169,11 @@ export default function HistoryPanel({
                       </div>
 
                       {/* Amount */}
-                      <div className={clsx('font-mono font-bold text-sm flex-shrink-0', meta.color)}>
-                        {isPositive ? '+' : '−'}{Math.abs(entry.amount).toLocaleString()}
-                      </div>
+                      {!entry.hideAmount && (
+                        <div className={clsx('history-entry-amount font-mono font-black flex-shrink-0', amountTone)}>
+                          {entry.amount >= 0 ? '+' : '−'}{Math.abs(entry.amount).toLocaleString()}
+                        </div>
+                      )}
                     </div>
                   )
                 })}

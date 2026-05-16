@@ -18,6 +18,7 @@ interface HistoryEntry {
   timestamp?: string
   betTarget?: number
   revealResult?: boolean
+  hideAmount?: boolean
 }
 
 interface OrderedHistoryEntry extends HistoryEntry {
@@ -105,6 +106,18 @@ const formatPercent = (returnAmount: number, spent: number) => {
   return `${Number.isInteger(pct) ? pct.toFixed(0) : pct.toFixed(1)}%`
 }
 
+const disownedGroupFromRows = (rows: any[]) => {
+  const row20 = rows?.[19]?.c ?? []
+  return String(row20?.[14]?.v ?? row20?.[15]?.v ?? row20?.[405]?.v ?? '').trim()
+}
+
+const fetchDisownedGroup = async (wave: number, rows: any[]) => {
+  const fromVisibleColumns = disownedGroupFromRows(rows)
+  if (fromVisibleColumns) return fromVisibleColumns
+  const opRows = await fetchSheetRows(`${getWaveSheetQuery(wave)}&range=${encodeURIComponent('OP20:OP20')}`)
+  return String(opRows?.[0]?.c?.[0]?.v ?? '').trim()
+}
+
 function FinanceHistory({
   initialBaan = null,
   initialWave = 'all',
@@ -176,6 +189,7 @@ function FinanceHistory({
         const read = (idx: number) => c?.[idx]?.v
         const numberAt = (idx: number) => parseFloat(String(read(idx) ?? 0)) || 0
         const textAt = (idx: number) => String(read(idx) ?? '').trim()
+        const hasCellValue = (idx: number) => textAt(idx) !== ''
         const startingBalance = numberAt(1)
         const isCurrentWave = wave === currentWave
         const revealWave = showResults || !isCurrentWave
@@ -200,6 +214,14 @@ function FinanceHistory({
         const winnerRow = rows.find((r: any) => String(r?.c?.[6]?.v ?? '').trim() === '1')
         const winningKingHouse = winnerRow ? parseInt(String(winnerRow?.c?.[0]?.v ?? '')) : null
         const winningKingBid = winnerRow ? parseFloat(String(winnerRow?.c?.[5]?.v ?? 0)) || 0 : 0
+        const currentKingGain = numberAt(23)
+        const bonusIslandAmount = wave === 2 ? numberAt(22) : 0
+        const ladderAmount = wave === 2 || wave === 4 ? numberAt(24) : 0
+        const honestyAmount = numberAt(25)
+        const adminLabel = textAt(26)
+        const adminAmount = numberAt(27)
+        const hasAdminAmount = hasCellValue(27)
+        const disownedGroup = wave === 4 ? await fetchDisownedGroup(wave, rows) : ''
 
         const betHouse = textAt(2)
         const betAmountSheet = numberAt(3)
@@ -261,10 +283,19 @@ function FinanceHistory({
           })
         }
 
+        const visibleResultAdjustments =
+          betReturn +
+          islandReturnTotal +
+          currentKingGain +
+          bonusIslandAmount +
+          ladderAmount +
+          honestyAmount +
+          (adminLabel && hasAdminAmount ? adminAmount : 0)
+
         if (revealWave) {
           latestBalance = read(20) != null && String(read(20)).trim() !== ''
             ? numberAt(20)
-            : startingBalance - betAmountSheet - kingAmount - islandSpentTotal + betReturn + islandReturnTotal
+            : startingBalance - betAmountSheet - kingAmount - islandSpentTotal + visibleResultAdjustments
         } else {
           latestBalance = startingBalance - betAmountSheet - kingAmount - islandSpentTotal
         }
@@ -284,17 +315,74 @@ function FinanceHistory({
           revealResult: isCurrentWave,
         }))
 
-        if (revealWave && (wave === 2 || wave === 4)) {
-          const ladderAmount = numberAt(24)
+        if (revealWave && (wave === 2 || wave === 4) && ladderAmount !== 0) {
           nextEntries.push({
             order: wave * 100 + 45,
             wave,
-            label: 'เกมพลิกเกม - บันไดงูพิสดาร',
-            detail: 'เงินที่ได้จากการเก็บซองคำใบ้',
+            label: 'บันไดงู',
+            detail: 'Score from Y column',
             amount: ladderAmount,
             type: 'income',
             revealResult: isCurrentWave,
           })
+        }
+
+        if (revealWave) {
+          const resultEntries = [
+            {
+              label: 'Current king gain',
+              detail: 'Current king bonus from X column',
+              amount: currentKingGain,
+              order: wave * 100 + 44,
+            },
+            {
+              label: 'Bonus island',
+              detail: 'Bonus island score from W column',
+              amount: bonusIslandAmount,
+              order: wave * 100 + 46,
+            },
+            {
+              label: 'Honesty',
+              detail: 'Honesty score from Z column',
+              amount: honestyAmount,
+              order: wave * 100 + 47,
+            },
+          ].filter(x => x.amount !== 0)
+
+          resultEntries.forEach(x => nextEntries.push({
+            order: x.order,
+            wave,
+            label: x.label,
+            detail: x.detail,
+            amount: x.amount,
+            type: x.amount >= 0 ? 'income' : 'lose',
+            revealResult: isCurrentWave,
+          }))
+
+          if (adminLabel && hasAdminAmount) {
+            nextEntries.push({
+              order: wave * 100 + 48,
+              wave,
+              label: adminLabel,
+              detail: 'Admin adjustment',
+              amount: adminAmount,
+              type: adminAmount >= 0 ? 'income' : 'lose',
+              revealResult: isCurrentWave,
+            })
+          }
+
+          if (wave === 4 && disownedGroup) {
+            nextEntries.push({
+              order: wave * 100 + 49,
+              wave,
+              label: 'Disowned Area Group',
+              detail: disownedGroup,
+              amount: 0,
+              type: 'disaster',
+              revealResult: isCurrentWave,
+              hideAmount: true,
+            })
+          }
         }
 
         if (revealWave && (betHouse || betAmountSheet || betReturn)) {
@@ -333,32 +421,6 @@ function FinanceHistory({
             type: kingResult === '1' ? 'reward' : 'lose',
             revealResult: isCurrentWave,
           })
-        }
-        if (revealWave && wave === 5) {
-          const kingFinalBonus = numberAt(21)
-          const islandFinalBonus = numberAt(22)
-          if (kingFinalBonus) {
-            nextEntries.push({
-              order: wave * 100 + 100,
-              wave,
-              label: 'Final king bonus',
-              detail: 'Wave 5 V column · last king',
-              amount: kingFinalBonus,
-              type: 'reward',
-              revealResult: isCurrentWave,
-            })
-          }
-          if (islandFinalBonus) {
-            nextEntries.push({
-              order: wave * 100 + 110,
-              wave,
-              label: 'Final island ownership bonus',
-              detail: 'Wave 5 W column · score from owned islands',
-              amount: islandFinalBonus,
-              type: 'reward',
-              revealResult: isCurrentWave,
-            })
-          }
         }
       }
 

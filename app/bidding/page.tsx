@@ -12,7 +12,7 @@ import { LogOut, PanelRight, Sparkles } from 'lucide-react'
 import { HOUSE_NAMES, SHEET_ID, getBaanPassword, getWaveSheetQuery } from '@/lib/constants'
 import {
   getGameState, saveSubmission, getSubmissionsForBaan,
-  subscribeStore, getActiveDisasterForWave, startCloudSync,
+  subscribeStore, getActiveDisasterForWave, setActiveDisaster, startCloudSync,
 } from '@/lib/store'
 import { fetchWaveInfo, writeToSheet } from '@/lib/sheets'
 
@@ -112,13 +112,25 @@ function BiddingGame({ baan }: { baan:number }) {
   const kingBidAmount = kingBid?.amount || 0
   const betSpend = parseFloat(betAmount) || 0
   const betAmountNumber = betAmount.trim() === '' ? NaN : Number(betAmount)
-  const isBetAmountValid = Number.isFinite(betAmountNumber) && betAmountNumber >= 500 && betAmountNumber <= balance
+  const minBetAmount = balance > 0 ? Math.ceil(balance * 0.1) : 0
+  const isBetAmountValid = balance > 0 && Number.isFinite(betAmountNumber) && betAmountNumber >= minBetAmount && betAmountNumber <= balance
   const isBetMode = gs.gameMode === 'bet'
+  const isSelectDisasterPhase = !isBetMode && gs.gamePhase === 'select-disaster'
   const currentSubmission = getSubmissionsForBaan(baan).find(s => s.wave === gs.currentWave)
   const priorBetSpend = !isBetMode ? sheetBetSpend || currentSubmission?.betAmount || 0 : 0
   const effectiveBalance = Math.max(0, balance - priorBetSpend)
   const canChooseKingDisaster = isKing || currentKing === baan
+  const canEditBid = gs.isOpen && !isBetMode && !isSelectDisasterPhase
+  const canSelectKingDisaster = gs.isOpen && isSelectDisasterPhase && canChooseKingDisaster
+  const canSeeCurrentOwnership = gs.showResults === true || canSelectKingDisaster
   const sheetOwnership = useWaveOwnership(gs.currentWave)
+  const visibleOwnership = canSeeCurrentOwnership ? sheetOwnership.ownership : {}
+  const activeSheetDisaster = getActiveDisasterForWave(gs.currentWave)
+  const mapKingDisaster = isSelectDisasterPhase && canChooseKingDisaster
+    ? kingDis
+    : gs.showResults === true
+      ? activeSheetDisaster
+      : null
 
   /* fetch balance from Wave sheet */
   const fetchBalance = useCallback(async()=>{
@@ -149,12 +161,17 @@ function BiddingGame({ baan }: { baan:number }) {
 
   const fetchKingInfo = useCallback(async () => {
     try {
-      const info = await fetchWaveInfo(getGameState().currentWave)
+      const state = getGameState()
+      const wave = state.currentWave
+      const info = await fetchWaveInfo(wave)
       setCurrentKing(info.king)
       setIsKing(info.king === baan)
-      setKingDis(info.disaster)
+      if (!(state.isOpen && state.gamePhase === 'select-disaster' && info.king === baan && !isSaved)) {
+        setKingDis(info.disaster)
+      }
+      setActiveDisaster(wave, info.disaster)
     } catch(e) { console.error(e) }
-  }, [baan])
+  }, [baan, isSaved])
 
   useEffect(()=>{
     const refresh = () => { void fetchKingInfo() }
@@ -225,7 +242,7 @@ function BiddingGame({ baan }: { baan:number }) {
 
   /* map select */
   const handleSelect = (area:string)=>{
-    if(!gs.isOpen) return
+    if(!canEditBid) return
     const alreadySelected = cart.some(i=>i.area===area)
     if (!alreadySelected && effectiveBalance - totalBet < 100) {
       setSaveMessage('Balance is still loading or below minimum')
@@ -237,52 +254,64 @@ function BiddingGame({ baan }: { baan:number }) {
   }
 
   const handleCartUpdate = useCallback((items: CartItem[]) => {
-    if (!getGameState().isOpen) return
+    const state = getGameState()
+    if (!state.isOpen || state.gameMode === 'bet' || state.gamePhase === 'select-disaster') return
     setCart([...items.filter(x=>x.area !== 'KING').slice(0,3), ...items.filter(x=>x.area === 'KING').slice(0,1)])
     setIsSaved(false)
   }, [])
 
   const handleKingDisasterUpdate = useCallback((disaster: number | null) => {
-    if (!getGameState().isOpen) return
+    const state = getGameState()
+    if (!state.isOpen || state.gameMode === 'bet' || state.gamePhase !== 'select-disaster' || !canChooseKingDisaster) return
     setKingDis(disaster)
     setIsSaved(false)
-  }, [])
+  }, [canChooseKingDisaster])
 
   /* save — local store + write to Google Sheet */
   const handleSave = useCallback(async ()=>{
     if(!gs.isOpen) return
-    const hasInvalidBidAmount = cart.some(i => i.amount <= 0)
-    if(isBetMode && (betSpend < 500 || betSpend > balance)) return
-    if(!isBetMode && (hasInvalidBidAmount || (totalBet <= 0 && !(canChooseKingDisaster && kingDis)) || totalBet > effectiveBalance)) return
+    const hasInvalidBidAmount = cart.some(i => i.amount < 100)
+    if(isBetMode && !isBetAmountValid) return
+    if(isSelectDisasterPhase && (!canSelectKingDisaster || !kingDis)) return
+    if(!isBetMode && !isSelectDisasterPhase && (hasInvalidBidAmount || totalBet <= 0 || totalBet > effectiveBalance)) return
 
     // 1. Save locally (instant, always works)
     saveSubmission({
       baan,
       wave: gs.currentWave,
-      bets: isBetMode ? currentSubmission?.bets ?? [] : cart,
+      bets: isBetMode || isSelectDisasterPhase ? currentSubmission?.bets ?? [] : cart,
       isKing: canChooseKingDisaster,
-      kingDisaster: canChooseKingDisaster ? kingDis ?? undefined : undefined,
+      kingDisaster: canSelectKingDisaster ? kingDis ?? undefined : currentSubmission?.kingDisaster,
       betTarget: isBetMode && betTarget ? parseInt(betTarget) : currentSubmission?.betTarget,
       betAmount: isBetMode ? betSpend : currentSubmission?.betAmount,
       timestamp: new Date().toLocaleTimeString('th-TH'),
-      balance: isBetMode ? balance - betSpend : effectiveBalance,
+      balance: isBetMode ? balance - betSpend : currentSubmission?.balance ?? effectiveBalance,
     })
     setIsSaved(true); setSavedAt(new Date().toLocaleTimeString('th-TH'))
+    if (isSelectDisasterPhase) setActiveDisaster(gs.currentWave, kingDis)
 
     // 2. Write to Google Sheet via GAS (async, non-blocking)
     // Map cart items to up to 3 islands (areas)
     const islands = islandCart.slice(0,3).map(i=>({ name: i.area, amount: i.amount }))
     setSaveMessage('Sending to admin...')
-    writeToSheet({
-      action: 'writeWave',
+    const payload = isSelectDisasterPhase
+      ? {
+        action: 'writeWave' as const,
+        wave: gs.currentWave,
+        baan,
+        kingDisaster: kingDis,
+      }
+      : {
+      action: 'writeWave' as const,
       wave:   gs.currentWave,
       baan,
       betTarget: isBetMode && betTarget ? parseInt(betTarget) : undefined,
       betAmount: isBetMode ? betSpend : undefined,
       kingAmount: !isBetMode && kingBid ? kingBidAmount : undefined,
-      kingDisaster: canChooseKingDisaster ? kingDis : undefined,
+      kingDisaster: undefined,
       islands: isBetMode ? undefined : islands,
-    }).then(res => {
+    }
+    writeToSheet(payload).then(res => {
       setSaveMessage(res.ok ? 'Sent to admin' : `Admin sync error: ${res.message ?? 'not sent'}`)
       if (!res.ok) console.warn('Sheet write failed:', res.message)
       fetchBalance()
@@ -290,7 +319,7 @@ function BiddingGame({ baan }: { baan:number }) {
       setSaveMessage('Admin sync error')
       console.error(e)
     })
-  },[baan,cart,gs.currentWave,gs.isOpen,canChooseKingDisaster,kingDis,balance,totalBet,isBetMode,betTarget,betSpend,fetchBalance,effectiveBalance,currentSubmission,islandCart,kingBid,kingBidAmount])
+  },[baan,cart,gs.currentWave,gs.isOpen,canChooseKingDisaster,canSelectKingDisaster,kingDis,balance,totalBet,isBetMode,isSelectDisasterPhase,betTarget,betSpend,isBetAmountValid,fetchBalance,effectiveBalance,currentSubmission,islandCart,kingBid,kingBidAmount])
 
   /* autosave */
   useEffect(()=>{
@@ -298,12 +327,15 @@ function BiddingGame({ baan }: { baan:number }) {
       clearTimeout(saveTimer.current)
       return
     }
-    if(cart.length===0&&isSaved) return
+    if(isBetMode) return
+    if(isSelectDisasterPhase && !canSelectKingDisaster) return
+    if(!isSelectDisasterPhase && cart.length===0&&isSaved) return
+    if(isSelectDisasterPhase && !kingDis&&isSaved) return
     const markUnsaved = setTimeout(() => setIsSaved(false), 0)
     clearTimeout(saveTimer.current)
     saveTimer.current=setTimeout(handleSave,5000)
     return()=>{ clearTimeout(markUnsaved); clearTimeout(saveTimer.current) }
-  },[cart,kingDis,gs.isOpen]) // eslint-disable-line
+  },[cart,kingDis,gs.isOpen,isBetMode,isSelectDisasterPhase,canSelectKingDisaster,isSaved,handleSave])
 
   const normalizeBetAmount = () => {
     if (betAmount.trim() === '') return
@@ -312,7 +344,7 @@ function BiddingGame({ baan }: { baan:number }) {
       setBetAmount('')
       return
     }
-    setBetAmount(String(Math.min(Math.max(500, raw), balance)))
+    setBetAmount(String(Math.min(Math.max(minBetAmount, raw), balance)))
   }
 
   if (!isLoaded) return (
@@ -373,8 +405,13 @@ function BiddingGame({ baan }: { baan:number }) {
               <FullscreenButton targetId="bidding-main-fullscreen" />
               {!isBetMode && <div className="flex flex-wrap gap-2">
                 <span className={clsx('badge', !isBetMode ? 'badge-blue' : 'badge-green')}>
-                  {isBetMode ? 'Bet mode: guess minigame rank' : 'Bid mode: choose up to 3 islands'}
+                  {isSelectDisasterPhase ? 'Select disaster phase' : 'Bid mode: choose up to 3 islands'}
                 </span>
+                {isSelectDisasterPhase && (
+                  <span className={clsx('badge', canChooseKingDisaster ? 'badge-gold' : 'badge-red')}>
+                    {canChooseKingDisaster ? 'You are choosing disaster' : 'King is choosing disaster'}
+                  </span>
+                )}
               </div>}
               <div className="wire-panel wire-panel-soft">
                 <div className="wire-panel-body">
@@ -396,7 +433,7 @@ function BiddingGame({ baan }: { baan:number }) {
                       </div>
                       <div>
                         <label className="text-label mb-2 block">Bet amount</label>
-                        <input type="number" value={betAmount} min={500} max={balance} step={100} disabled={!gs.isOpen}
+                        <input type="number" value={betAmount} min={minBetAmount} max={balance} step={100} disabled={!gs.isOpen}
                           onChange={e=>{
                             setBetAmount(e.target.value)
                             setIsSaved(false)
@@ -405,7 +442,7 @@ function BiddingGame({ baan }: { baan:number }) {
                           className="input-base font-mono" placeholder="0" />
                         {betAmount && !isBetAmountValid && (
                           <div className="mt-1 text-xs font-semibold text-red-600">
-                            Amount must be 500 - {balance.toLocaleString()}
+                            Amount must be {minBetAmount.toLocaleString()} - {balance.toLocaleString()}
                           </div>
                         )}
                       </div>
@@ -432,11 +469,24 @@ function BiddingGame({ baan }: { baan:number }) {
                       )}
                     </div>
                   ) : (
-                    <GameMap ownership={sheetOwnership.ownership} selected={selectedAreas}
+                    <>
+                      {isSelectDisasterPhase && !canChooseKingDisaster && (
+                        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+                          King is choosing disaster. Please wait.
+                        </div>
+                      )}
+                      {!canSeeCurrentOwnership && (
+                        <div className="mb-4 rounded-lg border border-slate-200 bg-white/85 px-4 py-3 text-sm font-semibold text-slate-700">
+                          Ownerships are hidden until admin shows results.
+                        </div>
+                      )}
+                    <GameMap ownership={visibleOwnership} selected={selectedAreas}
                       onSelect={handleSelect} filterDisaster={filterDis}
-                      readOnly={!gs.isOpen}
-                      kingDisaster={getActiveDisasterForWave(gs.currentWave)}
+                      readOnly={!canEditBid}
+                      kingDisaster={mapKingDisaster}
+                      kingDisasterTone={isSelectDisasterPhase && canChooseKingDisaster ? 'selection' : 'result'}
                       compact />
+                    </>
                   )}
                 </div>
               </div>
@@ -460,7 +510,10 @@ function BiddingGame({ baan }: { baan:number }) {
                   kingDisaster={kingDis}
                   onUpdate={handleCartUpdate}
                   onKingDisaster={handleKingDisasterUpdate}
-                  onSubmit={handleSave} isSaved={isSaved} savedAt={savedAt} isOpen={gs.isOpen} />
+                  onSubmit={handleSave} isSaved={isSaved} savedAt={savedAt} isOpen={gs.isOpen}
+                  bidOpen={canEditBid}
+                  disasterOpen={canSelectKingDisaster}
+                  isDisasterPhase={isSelectDisasterPhase} />
                 <div className="wire-section-title bg-blue-500 text-white">
                   {isSaved?(savedAt?`Saved at ${savedAt}`:'Saved'):'Unsaved / autosave in 5s'}
                 </div>

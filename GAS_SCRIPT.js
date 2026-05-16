@@ -89,6 +89,8 @@ function handleWriteGameState(state) {
     ['timerEnd', state.timerEnd || ''],
     ['duration', duration],
     ['gameMode', state.gameMode === 'bet' ? 'bet' : 'bid'],
+    ['gamePhase', state.gamePhase === 'select-disaster' ? 'select-disaster' : 'play'],
+    ['showResults', state.showResults === true ? 'true' : 'false'],
     ['updatedAt', state.updatedAt || new Date().toISOString()],
   ]
   sheet.getRange(1, 1, rows.length, 2).setValues(rows)
@@ -105,9 +107,6 @@ function handleWriteWave(payload) {
   if (!baan || baan < 1 || baan > 12) return { status: 'error', message: 'Invalid baan' }
   if (kingDisaster !== undefined && kingDisaster !== null && (kingDisaster < 1 || kingDisaster > 9)) {
     return { status: 'error', message: 'Invalid king disaster' }
-  }
-  if (betAmount !== undefined && betAmount !== null && betAmount < 500) {
-    return { status: 'error', message: 'Bet minimum is 500' }
   }
   if (kingAmount !== undefined && kingAmount !== null && kingAmount < 100) {
     return { status: 'error', message: 'King bid minimum is 100' }
@@ -130,7 +129,8 @@ function handleWriteWave(payload) {
   const row = DATA_START_ROW + baan - 1
 
   // ── Read current balance to validate ──────────────────
-  const currentBalance = sheet.getRange(row, COL.BALANCE).getValue()
+  const currentBalance = Number(sheet.getRange(row, COL.BALANCE).getValue()) || 0
+  const minBetAmount = Math.ceil(currentBalance * 0.1)
   const hasIslandPayload = Array.isArray(islands) && islands.length > 0
   const islandSpend = hasIslandPayload ? islands.reduce((sum, isl) => sum + (isl.amount || 0), 0) : 0
   const hasBetPayload = betTarget !== undefined || betAmount !== undefined
@@ -149,6 +149,9 @@ function handleWriteWave(payload) {
     (hasIslandPayload ? islandSpend : 0)
   const totalSpendAfterSave = nextBetSpend + nextKingSpend + nextIslandSpend
 
+  if (betAmount !== undefined && betAmount !== null && betAmount < minBetAmount) {
+    return { status: 'error', message: `Bet minimum is ${minBetAmount}` }
+  }
   if (totalSpend <= 0 && !hasDisasterOnlyPayload) {
     return {
       status: 'error',
