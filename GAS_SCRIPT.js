@@ -84,8 +84,9 @@ function handleWriteChat(payload) {
     if (emptyIndex >= 0) targetRow = 2 + emptyIndex
   }
 
+  const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'M/d/yyyy h:mm a')
   sheet.getRange(targetRow, 1, 1, 4).setValues([[
-    new Date(),
+    timestamp,
     actor,
     message.slice(0, 500),
     1,
@@ -118,7 +119,7 @@ function handleMarkChatRead(payload) {
 
 function normalizeChatActor_(actor) {
   const raw = String(actor || '').trim()
-  if (raw.toLowerCase() === 'admin') return 'admin'
+  if (raw.toLowerCase() === 'admin') return 'Admin'
   const baan = Number(raw)
   if (baan >= 1 && baan <= 12) return baan
   return ''

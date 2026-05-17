@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useState } from 'react'
 import clsx from 'clsx'
 import { HOUSE_COLORS, HOUSE_NAMES } from '@/lib/constants'
 import { fetchLieHistoryWave, type LieHistoryCell } from '@/lib/sheets'
@@ -60,9 +60,19 @@ export default function LieHistory({ className }: { className?: string }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50">
-              <th className="px-3 py-2 text-left">House</th>
+              <th rowSpan={2} className="px-3 py-2 text-left align-middle">House</th>
               {LIE_WAVES.map(wave => (
-                <th key={wave} className="min-w-44 px-3 py-2 text-left">Wave {wave}</th>
+                <th key={wave} colSpan={2} className="min-w-56 border-l border-slate-200 px-3 py-2 text-center">
+                  Wave {wave}
+                </th>
+              ))}
+            </tr>
+            <tr className="border-b border-slate-200 bg-slate-50/80">
+              {LIE_WAVES.map(wave => (
+                <Fragment key={wave}>
+                  <th className="min-w-32 border-l border-slate-200 px-3 py-1.5 text-left text-[0.66rem] uppercase tracking-[0.08em] text-slate-500">Promises</th>
+                  <th className="min-w-32 px-3 py-1.5 text-left text-[0.66rem] uppercase tracking-[0.08em] text-slate-500">Actual</th>
+                </Fragment>
               ))}
             </tr>
           </thead>
@@ -77,18 +87,14 @@ export default function LieHistory({ className }: { className?: string }) {
                   const promises = cell?.promises ?? []
                   const actual = cell?.actual ?? []
                   return (
-                    <td key={wave} className="px-3 py-2 align-top text-slate-700">
-                      <div className="lie-cell">
-                        <div>
-                          <div className="lie-cell-label">Promises</div>
-                          <PromiseTokens promises={promises} actual={actual} />
-                        </div>
-                        <div>
-                          <div className="lie-cell-label">Actual</div>
-                          <div className="lie-actual-text">{actual.length ? actual.join(', ') : '-'}</div>
-                        </div>
-                      </div>
-                    </td>
+                    <Fragment key={wave}>
+                      <td className="border-l border-slate-100 px-3 py-2 align-top text-slate-700">
+                        <PromiseTokens promises={promises} actual={actual} />
+                      </td>
+                      <td className="px-3 py-2 align-top text-slate-700">
+                        <div className="lie-actual-text">{actual.length ? actual.join(', ') : '-'}</div>
+                      </td>
+                    </Fragment>
                   )
                 })}
               </tr>

@@ -75,7 +75,7 @@ async function fetchGidRangeGViz(gid: string, range?: string): Promise<any[][]> 
     if (!js) return []
     const rows: any[] = JSON.parse(js)?.table?.rows ?? []
     return rows.map(r =>
-      (r.c ?? []).map((cell: any) => (cell?.v != null ? String(cell.v) : ''))
+      (r.c ?? []).map((cell: any) => (cell?.f != null ? String(cell.f) : cell?.v != null ? String(cell.v) : ''))
     )
   } catch (e) {
     console.error(`fetchGidRangeGViz(${gid}${range ? `, ${range}` : ''}):`, e)
@@ -238,7 +238,7 @@ export async function fetchGroupChatMessages(): Promise<GroupChatMessage[]> {
       id: `${i + 2}-${timestamp}-${baanRaw}-${message}`,
       row: i + 2,
       timestamp,
-      sender: isAdmin ? 'admin' : baanRaw,
+      sender: isAdmin ? 'Admin' : baanRaw,
       baan: !isNaN(baan) && baan >= 1 && baan <= 12 ? baan : null,
       readCount: Number.isFinite(readCount) ? Math.max(0, Math.min(13, readCount)) : 0,
       message,

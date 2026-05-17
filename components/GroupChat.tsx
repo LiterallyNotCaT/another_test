@@ -12,9 +12,9 @@ import {
   type GroupChatMessage,
 } from '@/lib/sheets'
 
-function formatChatTime(raw: string) {
+function parseChatDate(raw: string) {
   const dateParts = raw.match(/^Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?\)$/)
-  const date = dateParts
+  return dateParts
     ? new Date(
       Number(dateParts[1]),
       Number(dateParts[2]),
@@ -24,6 +24,10 @@ function formatChatTime(raw: string) {
       Number(dateParts[6] ?? 0),
     )
     : new Date(raw)
+}
+
+function formatChatTime(raw: string) {
+  const date = parseChatDate(raw)
   if (!Number.isNaN(date.getTime())) {
     return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
   }
@@ -41,7 +45,7 @@ function isSameActor(message: GroupChatMessage, actor: GroupChatActor) {
 }
 
 function actorLabel(actor: GroupChatActor) {
-  return actor === 'admin' ? 'admin' : HOUSE_NAMES[actor]
+  return actor === 'admin' ? 'Admin' : HOUSE_NAMES[actor]
 }
 
 export default function GroupChat({ actor, label }: { actor: GroupChatActor; label?: string }) {
@@ -54,6 +58,7 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
   const seenLatestRef = useRef('')
   const initializedRef = useRef(false)
   const listRef = useRef<HTMLDivElement | null>(null)
+  const openedAtRef = useRef(0)
   const actorId = actorKey(actor)
 
   const refresh = useCallback(async () => {
@@ -85,7 +90,11 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
   }, [refresh])
 
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      openedAtRef.current = 0
+      return
+    }
+    if (!openedAtRef.current) openedAtRef.current = Date.now()
     const latestId = messages.at(-1)?.id ?? ''
     seenLatestRef.current = latestId
     setUnread(false)
@@ -95,13 +104,17 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
   }, [open, messages])
 
   useEffect(() => {
-    if (!open || !messages.length) return
+    if (!open || !messages.length || !openedAtRef.current) return
     const storageKey = `biggame_chat_read_${actorId}`
     let readRows: number[] = []
     try { readRows = JSON.parse(localStorage.getItem(storageKey) || '[]') } catch {}
     const readSet = new Set(readRows)
     const rowsToMark = messages
-      .filter(message => !isSameActor(message, actor) && !readSet.has(message.row))
+      .filter(message => {
+        if (isSameActor(message, actor) || readSet.has(message.row)) return false
+        const messageTime = parseChatDate(message.timestamp).getTime()
+        return Number.isFinite(messageTime) && messageTime <= openedAtRef.current
+      })
       .map(message => message.row)
     if (!rowsToMark.length) return
 
@@ -150,13 +163,13 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
             <div ref={listRef} className="group-chat-list">
               {messages.map(message => {
                 const isMine = isSameActor(message, actor)
-                const color = message.sender.toLowerCase() === 'admin'
-                  ? '#111827'
-                  : message.baan ? HOUSE_COLORS[message.baan] : '#64748b'
+                const isAdmin = message.sender.toLowerCase() === 'admin'
+                const color = isAdmin ? '#111827' : message.baan ? HOUSE_COLORS[message.baan] : '#64748b'
+                const senderName = isAdmin ? 'Admin' : message.baan ? HOUSE_NAMES[message.baan] : 'Unknown'
                 return (
                   <div key={message.id} className={clsx('group-chat-message-row', isMine && 'is-mine')}>
                     <div className="group-chat-message-meta">
-                      <span style={{ color }}>{message.sender.toLowerCase() === 'admin' ? 'admin' : message.baan ? HOUSE_NAMES[message.baan] : 'Unknown'}</span>
+                      <span style={{ color }}>{senderName}</span>
                       <span>{formatChatTime(message.timestamp)}</span>
                     </div>
                     <div className={clsx('group-chat-bubble', isMine && 'is-mine')} style={isMine ? { background: color } : undefined}>

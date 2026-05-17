@@ -6,6 +6,7 @@ import GameMap from '@/components/GameMap'
 import FinanceHistory from '@/components/FinanceHistory'
 import FullscreenButton from '@/components/FullscreenButton'
 import GroupChat from '@/components/GroupChat'
+import LieHistory from '@/components/LieHistory'
 import OwnershipHistory, { useWaveOwnership } from '@/components/OwnershipHistory'
 import SharedScoreboard from '@/components/SharedScoreboard'
 import Timer from '@/components/Timer'
@@ -40,7 +41,7 @@ const AMBASSADOR_TAB_CONTROLS: Array<{ key: AmbassadorTabKey; label: string }> =
 
 function AdminContent() {
   const [gs,          setGS]          = useState(getGameState())
-  const [tab,         setTab]         = useState<'dashboard'|'map'|'history'|'ownership'|'leaderboard'>('dashboard')
+  const [tab,         setTab]         = useState<'dashboard'|'map'|'history'|'ownership'|'lieHistory'|'leaderboard'>('dashboard')
   const [mapWave,     setMapWave]     = useState(getGameState().currentWave)
   const [submissionWave, setSubmissionWave] = useState(getGameState().currentWave)
   const [submissionGame, setSubmissionGame] = useState<'bid'|'bet'>(getGameState().gameMode === 'bet' ? 'bet' : 'bid')
@@ -194,7 +195,6 @@ function AdminContent() {
   const sheetSubmittedBaans = viewedSubmissionRows.filter(row => hasSubmittedForGame(row, submissionGame)).map(r=>r.baan)
   const submittedBaans = Array.from(new Set(sheetSubmittedBaans))
   const localSubmissionsCurrent = getSubmissionsForWave(submissionWave)
-  const currentWaveMeta = waveMeta[gs.currentWave] ?? { king: null, disaster: null }
   const viewedWaveMeta = waveMeta[submissionWave] ?? { king: null, disaster: null }
   const ambassadorVisibility = normalizeAmbassadorVisibility(gs.ambassadorVisibility)
   const setAmbassadorVisibility = (patch: Parameters<typeof normalizeAmbassadorVisibility>[0]) => {
@@ -247,6 +247,7 @@ function AdminContent() {
                     ['map','MAP',<Map key="m" size={14}/>],
                     ['history','History',<History key="h" size={14}/>],
                     ['ownership','Ownership',<Map key="o" size={14}/>],
+                    ['lieHistory','Lie History',<History key="lh" size={14}/>],
                     ['leaderboard','Leaderboard',<Trophy key="t" size={14}/>],
                   ] as const).map(([value,label,icon])=>(
                     <button key={value} onClick={()=>setTab(value)}
@@ -288,13 +289,7 @@ function AdminContent() {
                       </div>
                     </div>
                     {submissionGame === 'bid' && (
-                      <div className="admin-bid-status-grid mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
-                        <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2">
-                          <div className="text-label">Current wave king</div>
-                          <div className="text-sm font-bold text-yellow-800">
-                            {currentWaveMeta.king ? HOUSE_NAMES[currentWaveMeta.king] : '-'}
-                          </div>
-                        </div>
+                      <div className="admin-bid-status-grid mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
                         <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
                           <div className="text-label">Viewing wave king</div>
                           <div className="text-sm font-bold text-blue-800">
@@ -363,6 +358,10 @@ function AdminContent() {
 
                 {tab==='ownership' && (
                   <OwnershipHistory />
+                )}
+
+                {tab==='lieHistory' && (
+                  <LieHistory />
                 )}
 
                 {tab==='history' && (
