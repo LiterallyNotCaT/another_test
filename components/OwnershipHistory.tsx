@@ -7,6 +7,7 @@ import { HOUSE_COLORS, HOUSE_NAMES, SHEET_ID, TOTAL_WAVES, getWaveSheetQuery } f
 export interface OwnershipRow {
   baan: number
   areas: string[]
+  disasterAreas: string[]
   count: number
 }
 
@@ -30,11 +31,15 @@ export async function fetchWaveOwnership(wave: number): Promise<{ ownership: Rec
     const baan = parseInt(String(row?.c?.[9]?.v ?? ''))
     if (!baan || baan < 1 || baan > 12) return
     const rawAreas = String(row?.c?.[10]?.v ?? '').trim()
+    const rawDisasterAreas = String(row?.c?.[13]?.v ?? '').trim()
     const areas = rawAreas && rawAreas !== '-'
       ? rawAreas.split(',').map(a => a.trim()).filter(Boolean)
       : []
+    const disasterAreas = rawDisasterAreas && rawDisasterAreas !== '-'
+      ? rawDisasterAreas.split(',').map(a => a.trim()).filter(Boolean)
+      : []
     const count = parseFloat(String(row?.c?.[11]?.v ?? areas.length)) || areas.length
-    rows.push({ baan, areas, count })
+    rows.push({ baan, areas, disasterAreas, count })
     areas.forEach(area => { ownership[area] = baan })
   })
 
@@ -65,17 +70,17 @@ export function useWaveOwnership(wave: number) {
 }
 
 export default function OwnershipHistory({ className }: { wave?: number; className?: string }) {
-  const [matrix, setMatrix] = useState<Record<number, Record<number, string[]>>>({})
+  const [matrix, setMatrix] = useState<Record<number, Record<number, { areas: string[]; disasterAreas: string[] }>>>({})
 
   const refreshAll = useCallback(async () => {
     try {
-      const next: Record<number, Record<number, string[]>> = {}
+      const next: Record<number, Record<number, { areas: string[]; disasterAreas: string[] }>> = {}
       await Promise.all(Array.from({ length: TOTAL_WAVES }, async (_, i) => {
         const wave = i + 1
         const data = await fetchWaveOwnership(wave)
         next[wave] = {}
         data.rows.forEach(row => {
-          next[wave][row.baan] = row.areas
+          next[wave][row.baan] = { areas: row.areas, disasterAreas: row.disasterAreas }
         })
       }))
       setMatrix(next)
@@ -114,10 +119,21 @@ export default function OwnershipHistory({ className }: { wave?: number; classNa
                 </td>
                 {Array.from({ length: TOTAL_WAVES }, (_, i) => {
                   const wave = i + 1
-                  const areas = matrix[wave]?.[baan] ?? []
+                  const cell = matrix[wave]?.[baan]
+                  const areas = cell?.areas ?? []
+                  const disasterAreas = cell?.disasterAreas ?? []
                   return (
                     <td key={wave} className="min-w-28 px-3 py-2 text-slate-700">
-                      {areas.length ? areas.join(', ') : '-'}
+                      {areas.length || disasterAreas.length ? (
+                        <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                          {areas.length ? <span>{areas.join(', ')}</span> : <span>-</span>}
+                          {disasterAreas.length > 0 && (
+                            <span className="ownership-disaster-areas">
+                              {disasterAreas.join(', ')}
+                            </span>
+                          )}
+                        </span>
+                      ) : '-'}
                     </td>
                   )
                 })}

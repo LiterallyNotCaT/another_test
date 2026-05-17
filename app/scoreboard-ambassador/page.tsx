@@ -21,6 +21,7 @@ function AmbassadorContent() {
   const [tab,         setTab]         = useState<'map'|'history'|'ownership'|'scoreboard'>('map')
   const [selWave,     setSelWave]     = useState(() => getGameState().currentWave)
   const [filterDis,   setFilterDis]   = useState<number|null>(null)
+  const [currentKing, setCurrentKing]  = useState<number|null>(null)
   const [gs,          setGS]          = useState(getGameState)
   const [isLoaded]                    = useState(true)
   const sheetOwnership = useWaveOwnership(selWave)
@@ -36,7 +37,11 @@ function AmbassadorContent() {
   useEffect(() => {
     let cancelled = false
     fetchWaveInfo(selWave)
-      .then(info => { if (!cancelled) setActiveDisaster(selWave, info.disaster) })
+      .then(info => {
+        if (cancelled) return
+        setCurrentKing(info.king)
+        setActiveDisaster(selWave, info.disaster)
+      })
       .catch(console.error)
     return () => { cancelled = true }
   }, [selWave])
@@ -107,6 +112,7 @@ function AmbassadorContent() {
                     </div>
                     <GameMap ownership={gs.showResults ? sheetOwnership.ownership : {}} filterDisaster={filterDis} readOnly
                       kingDisaster={gs.showResults ? getActiveDisasterForWave(selWave) : null}
+                      currentKing={currentKing}
                       compact />
                     <div className="ambassador-filter-row flex flex-wrap gap-2">
                       {DISASTER_IDS.map(id=>(

@@ -11,6 +11,7 @@ interface MapProps {
   readOnly?:       boolean
   kingDisaster?:   number | null
   kingDisasterTone?: 'selection' | 'result'
+  currentKing?:    number | null
   compact?:        boolean
 }
 
@@ -45,7 +46,7 @@ function getAffected(dn: number | null): Set<string> {
 }
 
 function GameMap({
-  ownership, selected=[], onSelect, filterDisaster, readOnly, kingDisaster, kingDisasterTone = 'result', compact,
+  ownership, selected=[], onSelect, filterDisaster, readOnly, kingDisaster, kingDisasterTone = 'result', currentKing = null, compact,
 }: MapProps) {
   const filterSet = filterDisaster != null ? getAffected(filterDisaster) : null
   const kingSet   = kingDisaster   != null ? getAffected(kingDisaster)   : null
@@ -59,13 +60,13 @@ function GameMap({
     <div className={clsx('game-map select-none', compact ? 'game-map-compact' : 'game-map-regular')}>
       {/* Filter notice */}
       {filterDisaster != null && (
-        <div className="toast-lift flex items-center gap-2 px-3 py-2 rounded-2xl bg-indigo-950/50 border border-indigo-400/25 text-xs text-indigo-200 shadow-[0_18px_45px_rgba(49,46,129,0.22)]">
+        <div className="toast-lift flex items-center gap-2 px-3 py-2 rounded-2xl bg-indigo-900 border border-yellow-300 text-xs text-white shadow-[0_18px_45px_rgba(49,46,129,0.30)]">
           <span className="font-mono font-bold">D{filterDisaster}</span>
           <span>Showing areas affected by disaster {filterDisaster}</span>
         </div>
       )}
       {kingDisaster != null && !filterDisaster && (
-        <div className="toast-lift flex items-center gap-2 px-3 py-2 rounded-2xl bg-yellow-950/45 border border-yellow-400/25 text-xs text-yellow-300 shadow-[0_18px_45px_rgba(113,63,18,0.20)]">
+        <div className="toast-lift flex items-center gap-2 px-3 py-2 rounded-2xl bg-fuchsia-800 border border-yellow-300 text-xs text-white shadow-[0_18px_45px_rgba(190,24,93,0.30)]">
           <span className="font-mono font-bold">D{kingDisaster}</span>
           <span>King disaster {kingDisaster} is highlighted</span>
         </div>
@@ -103,7 +104,7 @@ function GameMap({
             >
               {group.areas.map(area => {
                 const isKingIsland = area === 'KING'
-                const owner       = ownership[area] || 0
+                const owner       = isKingIsland ? currentKing ?? ownership[area] ?? 0 : ownership[area] || 0
                 const isSelected  = selected.includes(area)
                 const disasters   = getAreaDisasters(area)
                 const isFiltered  = filterSet?.has(area) ?? false
@@ -120,18 +121,18 @@ function GameMap({
                   bg = `${c}1a`; border = `${c}55`; textColor = c
                 }
                 if (filterSet != null) {
-                  if (isFiltered)  { bg='rgba(99,102,241,0.22)'; border='rgba(79,70,229,0.62)'; textColor='#3730a3' }
+                  if (isFiltered)  { bg='#312e81'; border='#facc15'; textColor='#ffffff' }
                   if (dimmed)      { bg='rgba(13,17,23,0.5)'; border='rgba(255,255,255,0.03)'; textColor='#1e293b' }
                 }
                 if (isKingHit && !filterSet) {
                   if (kingDisasterTone === 'selection') {
-                    bg = 'rgba(244,114,182,0.32)'
-                    border = 'rgba(219,39,119,0.72)'
-                    textColor = '#9d174d'
+                    bg = '#be185d'
+                    border = '#facc15'
+                    textColor = '#ffffff'
                   } else {
-                    bg = 'rgba(248,113,113,0.22)'
-                    border = 'rgba(239,68,68,0.52)'
-                    textColor = '#991b1b'
+                    bg = '#fee2e2'
+                    border = '#b91c1c'
+                    textColor = '#7f1d1d'
                   }
                 }
                 if (isSelected) {

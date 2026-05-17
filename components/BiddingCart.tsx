@@ -143,12 +143,12 @@ function BiddingCart({
               return (
                 <button key={n} onClick={()=>onKingDisaster(active?null:n)} disabled={!disasterOpen}
                   className={clsx(
-                    'min-h-12 rounded-2xl px-3 py-3 text-center font-mono text-base font-black transition-all active:scale-95',
+                    'min-h-14 rounded-2xl border-2 px-3 py-3 text-center font-mono text-lg font-black transition-all active:scale-95',
                     active
-                      ? 'bg-pink-500 text-white shadow-[0_10px_24px_rgba(236,72,153,0.28)] ring-2 ring-pink-200'
-                      : 'bg-white text-yellow-800 border border-yellow-200 hover:bg-yellow-50 disabled:opacity-40'
+                      ? 'border-yellow-300 bg-fuchsia-700 text-white shadow-[0_12px_28px_rgba(190,24,93,0.42)] ring-4 ring-fuchsia-200'
+                      : 'border-slate-300 bg-white text-slate-900 hover:border-fuchsia-500 hover:bg-fuchsia-50 disabled:opacity-40'
                   )}>
-                  {n}
+                  D{n}
                 </button>
               )
             })}

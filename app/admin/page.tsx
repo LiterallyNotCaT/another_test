@@ -25,6 +25,7 @@ import {
 const BID_PLAY_MINUTES = 10
 const BET_PLAY_MINUTES = 2
 const DISASTER_SELECT_MINUTES = 3
+type WaveMeta = { king: number | null; disaster: number | null }
 
 function AdminContent() {
   const [gs,          setGS]          = useState(getGameState())
@@ -33,6 +34,7 @@ function AdminContent() {
   const [submissionWave, setSubmissionWave] = useState(getGameState().currentWave)
   const [submissionGame, setSubmissionGame] = useState<'bid'|'bet'>(getGameState().gameMode === 'bet' ? 'bet' : 'bid')
   const [sheetInputs, setSheetInputs] = useState<Record<number, WaveInputRow[]>>({})
+  const [waveMeta,    setWaveMeta]    = useState<Record<number, WaveMeta>>({})
   const [savePulses,  setSavePulses]  = useState<Record<number, { count: number; at: number }>>({})
   const [nowTick,     setNowTick]     = useState(() => Date.now())
   const filterDis = null
@@ -61,12 +63,15 @@ function AdminContent() {
   const fetchAll = useCallback(async () => {
     try {
       const inputs: Record<number, WaveInputRow[]> = {}
+      const meta: Record<number, WaveMeta> = {}
       for (let w=1; w<=TOTAL_WAVES; w++) {
         const data = await fetchWaveInputs(w)
         inputs[w] = data.rows
+        meta[w] = { king: data.king, disaster: data.kingDisaster }
         setActiveDisaster(w, data.kingDisaster)
       }
       setSheetInputs(inputs)
+      setWaveMeta(meta)
     } catch(e){ console.error(e) }
   }, [])
 
@@ -178,6 +183,8 @@ function AdminContent() {
   const sheetSubmittedBaans = viewedSubmissionRows.filter(row => hasSubmittedForGame(row, submissionGame)).map(r=>r.baan)
   const submittedBaans = Array.from(new Set(sheetSubmittedBaans))
   const localSubmissionsCurrent = getSubmissionsForWave(submissionWave)
+  const currentWaveMeta = waveMeta[gs.currentWave] ?? { king: null, disaster: null }
+  const viewedWaveMeta = waveMeta[submissionWave] ?? { king: null, disaster: null }
 
   // ── Toast color ─────────────────────────────────────────
   const toastStyle = toast?.type==='err'
@@ -256,6 +263,28 @@ function AdminContent() {
                         </button>
                       </div>
                     </div>
+                    {submissionGame === 'bid' && (
+                      <div className="admin-bid-status-grid mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+                        <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2">
+                          <div className="text-label">Current wave king</div>
+                          <div className="text-sm font-bold text-yellow-800">
+                            {currentWaveMeta.king ? HOUSE_NAMES[currentWaveMeta.king] : '-'}
+                          </div>
+                        </div>
+                        <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+                          <div className="text-label">Viewing wave king</div>
+                          <div className="text-sm font-bold text-blue-800">
+                            {viewedWaveMeta.king ? HOUSE_NAMES[viewedWaveMeta.king] : '-'}
+                          </div>
+                        </div>
+                        <div className={clsx('rounded-lg border px-3 py-2', viewedWaveMeta.disaster ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50')}>
+                          <div className="text-label">Disaster selection</div>
+                          <div className={clsx('text-sm font-bold', viewedWaveMeta.disaster ? 'text-green-700' : 'text-red-700')}>
+                            {viewedWaveMeta.disaster ? `sent disaster D${viewedWaveMeta.disaster}` : 'no disaster'}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     <div className="admin-submission-grid grid grid-cols-1 gap-2 xl:grid-cols-2">
                       {Array.from({length:12},(_,i)=>i+1).map(b=>{
                         const row = viewedSubmissionRows.find(r=>r.baan===b)
@@ -302,7 +331,9 @@ function AdminContent() {
                       ))}
                     </div>
                     <GameMap ownership={sheetOwnership.ownership} filterDisaster={filterDis}
-                      kingDisaster={getActiveDisasterForWave(mapWave)} readOnly compact />
+                      kingDisaster={getActiveDisasterForWave(mapWave)}
+                      currentKing={waveMeta[mapWave]?.king ?? null}
+                      readOnly compact />
                   </div>
                 )}
 

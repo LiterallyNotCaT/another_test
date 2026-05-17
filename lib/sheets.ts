@@ -12,6 +12,7 @@ export { SHEET_ID } from './constants'
 // Your deployed GAS Web App URL — set this after deploying the script
 // See STEP 2 in the setup guide
 const GAS_URL = process.env.NEXT_PUBLIC_GAS_URL ?? ''
+const CHAT_GID = '398958693'
 
 // ── Column map (1-indexed, for reference) ──────────────────
 // Wave sheet rows 5–16 = บ้าน 1–12
@@ -61,6 +62,23 @@ async function fetchWaveRangeGViz(wave: number, range?: string): Promise<any[][]
     )
   } catch (e) {
     console.error(`fetchWaveGViz(${wave}${range ? `, ${range}` : ''}):`, e)
+    return []
+  }
+}
+
+async function fetchGidRangeGViz(gid: string, range?: string): Promise<any[][]> {
+  const rangeQuery = range ? `&range=${encodeURIComponent(range)}` : ''
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${encodeURIComponent(gid)}${rangeQuery}&t=${Date.now()}`
+  try {
+    const text = await (await fetch(url, { cache: 'no-store' })).text()
+    const js = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/)?.[1]
+    if (!js) return []
+    const rows: any[] = JSON.parse(js)?.table?.rows ?? []
+    return rows.map(r =>
+      (r.c ?? []).map((cell: any) => (cell?.v != null ? String(cell.v) : ''))
+    )
+  } catch (e) {
+    console.error(`fetchGidRangeGViz(${gid}${range ? `, ${range}` : ''}):`, e)
     return []
   }
 }
@@ -124,7 +142,7 @@ export interface WaveInputRow {
   hasBidInput: boolean
 }
 
-export async function fetchWaveInputs(wave: number): Promise<{ rows: WaveInputRow[]; kingDisaster: number | null }> {
+export async function fetchWaveInputs(wave: number): Promise<{ rows: WaveInputRow[]; king: number | null; kingDisaster: number | null }> {
   const rows = await fetchWaveRangeGViz(wave, 'A5:U16')
   const numberAt = (row: string[], idx: number) => parseFloat(String(row[idx] ?? 0)) || 0
   const textAt = (row: string[], idx: number) => String(row[idx] ?? '').trim()
@@ -185,10 +203,54 @@ export async function fetchWaveInputs(wave: number): Promise<{ rows: WaveInputRo
   const parsed = Array.from(
     parsedRows.reduce((byBaan, row) => byBaan.set(row.baan, row), new Map<number, WaveInputRow>()).values()
   ).sort((a, b) => a.baan - b.baan)
-  const infoRows = await fetchWaveRangeGViz(wave, 'H22:H22')
-  let kingDisaster: number | null = parseInt(infoRows?.[0]?.[0] ?? '')
+  const infoRows = await fetchWaveRangeGViz(wave, 'H20:H22')
+  let king: number | null = parseInt(infoRows?.[0]?.[0] ?? '')
+  let kingDisaster: number | null = parseInt(infoRows?.[2]?.[0] ?? '')
+  if (isNaN(king)) king = null
   if (isNaN(kingDisaster)) kingDisaster = null
-  return { rows: parsed, kingDisaster }
+  return { rows: parsed, king, kingDisaster }
+}
+
+export interface GroupChatMessage {
+  id: string
+  timestamp: string
+  baan: number | null
+  message: string
+}
+
+export async function fetchGroupChatMessages(): Promise<GroupChatMessage[]> {
+  const rows = await fetchGidRangeGViz(CHAT_GID, 'A2:C')
+  const messages: GroupChatMessage[] = []
+  for (let i = 0; i < rows.length; i++) {
+    const timestamp = String(rows[i]?.[0] ?? '').trim()
+    const baanRaw = String(rows[i]?.[1] ?? '').trim()
+    const message = String(rows[i]?.[2] ?? '').trim()
+    if (!timestamp && !baanRaw && !message) break
+    const baan = parseInt(baanRaw)
+    messages.push({
+      id: `${i}-${timestamp}-${baanRaw}-${message}`,
+      timestamp,
+      baan: !isNaN(baan) && baan >= 1 && baan <= 12 ? baan : null,
+      message,
+    })
+  }
+  return messages
+}
+
+export async function sendGroupChatMessage(baan: number, message: string): Promise<{ ok: boolean; message?: string }> {
+  if (!GAS_URL) return { ok: false, message: 'GAS URL not configured' }
+  try {
+    await fetch(GAS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'writeChat', baan, message }),
+    })
+    return { ok: true, message: 'Sent' }
+  } catch (e) {
+    console.error('sendGroupChatMessage:', e)
+    return { ok: false, message: String(e) }
+  }
 }
 
 // ── READ: King info for a wave ─────────────────────────────

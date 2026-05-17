@@ -5,10 +5,11 @@ import GameMap from '@/components/GameMap'
 import BiddingCart from '@/components/BiddingCart'
 import FinanceHistory from '@/components/FinanceHistory'
 import FullscreenButton from '@/components/FullscreenButton'
+import GroupChat from '@/components/GroupChat'
 import { useWaveOwnership } from '@/components/OwnershipHistory'
 import Timer from '@/components/Timer'
 import clsx from 'clsx'
-import { LogOut, PanelRight, Sparkles } from 'lucide-react'
+import { LogOut, Sparkles } from 'lucide-react'
 import { HOUSE_NAMES, SHEET_ID, getBaanPassword, getWaveSheetQuery } from '@/lib/constants'
 import {
   getGameState, saveSubmission, getSubmissionsForBaan,
@@ -93,7 +94,6 @@ function BiddingGame({ baan }: { baan:number }) {
   const [isSaved,   setIsSaved]   = useState(true)
   const [savedAt,   setSavedAt]   = useState('')
   const [saveMessage, setSaveMessage] = useState('')
-  const [panelOpen, setPanelOpen] = useState(true)
   const [betTarget, setBetTarget] = useState('')
   const [betAmount, setBetAmount] = useState('')
   const [sheetBetSpend, setSheetBetSpend] = useState(0)
@@ -390,9 +390,9 @@ function BiddingGame({ baan }: { baan:number }) {
               {gs.isOpen?'OPEN':'CLOSED'}
             </div>
             {!isBetMode && (
-              <button onClick={()=>setPanelOpen(p=>!p)} className="btn btn-ghost ml-auto">
-                <PanelRight size={14} /> {panelOpen ? 'Hide menu' : 'Show menu'}
-              </button>
+              <div className="ml-auto">
+                <GroupChat baan={baan} />
+              </div>
             )}
             <button onClick={()=>{sessionStorage.removeItem('baan_login');window.location.reload()}}
               className={clsx('btn btn-ghost', isBetMode && 'ml-auto')}>
@@ -485,6 +485,7 @@ function BiddingGame({ baan }: { baan:number }) {
                       readOnly={!canEditBid}
                       kingDisaster={mapKingDisaster}
                       kingDisasterTone={isSelectDisasterPhase && canChooseKingDisaster ? 'selection' : 'result'}
+                      currentKing={currentKing}
                       compact />
                     </>
                   )}
@@ -503,7 +504,7 @@ function BiddingGame({ baan }: { baan:number }) {
               </div>}
             </div>
 
-            {panelOpen && !isBetMode && (
+            {!isBetMode && (
               <aside className="wire-panel wire-side-panel">
                 <div className="wire-section-title">พื้นที่ที่เลือก</div>
                 <BiddingCart baan={baan} balance={effectiveBalance} items={cart} isKing={canChooseKingDisaster}

@@ -6,6 +6,7 @@
 
 const SHEET_ID = '1FKv1l9zpF85V_oUKQCjAjYyb4DZcMRCvN671DzU_Dq4'
 const STATE_SHEET = 'GAME_STATE'
+const CHAT_GID = 398958693
 const WAVE_GIDS = {
   1: 1448591830,
 }
@@ -45,6 +46,9 @@ function doPost(e) {
     if (payload.action === 'writeWave') {
       const result = handleWriteWave(payload)
       output.setContent(JSON.stringify(result))
+    } else if (payload.action === 'writeChat') {
+      const result = handleWriteChat(payload)
+      output.setContent(JSON.stringify(result))
     } else if (payload.action === 'writeGameState') {
       const result = handleWriteGameState(payload.state || {})
       output.setContent(JSON.stringify(result))
@@ -56,6 +60,33 @@ function doPost(e) {
   }
 
   return output
+}
+
+function handleWriteChat(payload) {
+  const baan = Number(payload.baan)
+  const message = String(payload.message || '').trim()
+  if (!baan || baan < 1 || baan > 12) return { status: 'error', message: 'Invalid baan' }
+  if (!message) return { status: 'error', message: 'Message is blank' }
+
+  const ss = SpreadsheetApp.openById(SHEET_ID)
+  const sheet = getSheetByGid_(ss, CHAT_GID)
+  if (!sheet) return { status: 'error', message: `Chat sheet gid ${CHAT_GID} not found` }
+
+  const lastRow = Math.max(sheet.getLastRow(), 1)
+  let targetRow = Math.max(lastRow + 1, 2)
+  if (lastRow >= 2) {
+    const values = sheet.getRange(2, 1, lastRow - 1, 3).getValues()
+    const emptyIndex = values.findIndex(row => row.every(cell => String(cell || '').trim() === ''))
+    if (emptyIndex >= 0) targetRow = 2 + emptyIndex
+  }
+
+  sheet.getRange(targetRow, 1, 1, 3).setValues([[
+    new Date(),
+    baan,
+    message.slice(0, 500),
+  ]])
+  SpreadsheetApp.flush()
+  return { status: 'ok', row: targetRow }
 }
 
 // Allow GET for health check
@@ -230,7 +261,7 @@ function handleWriteWave(payload) {
 function getWaveSheet_(ss, wave) {
   const gid = WAVE_GIDS[wave]
   if (gid) {
-    const byGid = ss.getSheets().find(sheet => sheet.getSheetId() === gid)
+    const byGid = getSheetByGid_(ss, gid)
     if (byGid) return byGid
   }
 
@@ -244,4 +275,8 @@ function getWaveSheet_(ss, wave) {
   return ss.getSheets().find(sheet =>
     String(sheet.getName()).toLowerCase().replace(/\s+/g, '') === normalizedTarget
   ) || null
+}
+
+function getSheetByGid_(ss, gid) {
+  return ss.getSheets().find(sheet => sheet.getSheetId() === Number(gid)) || null
 }
