@@ -69,14 +69,16 @@ export function useWaveOwnership(wave: number) {
   return { ownership, rows, refresh }
 }
 
-export default function OwnershipHistory({ className }: { wave?: number; className?: string }) {
+export default function OwnershipHistory({ visibleThroughWave = TOTAL_WAVES, className }: { wave?: number; visibleThroughWave?: number; className?: string }) {
   const [matrix, setMatrix] = useState<Record<number, Record<number, { areas: string[]; disasterAreas: string[] }>>>({})
+  const maxVisibleWave = Math.max(1, Math.min(TOTAL_WAVES, visibleThroughWave))
 
   const refreshAll = useCallback(async () => {
     try {
       const next: Record<number, Record<number, { areas: string[]; disasterAreas: string[] }>> = {}
       await Promise.all(Array.from({ length: TOTAL_WAVES }, async (_, i) => {
         const wave = i + 1
+        if (wave > maxVisibleWave) return
         const data = await fetchWaveOwnership(wave)
         next[wave] = {}
         data.rows.forEach(row => {
@@ -87,7 +89,7 @@ export default function OwnershipHistory({ className }: { wave?: number; classNa
     } catch (e) {
       console.error(e)
     }
-  }, [])
+  }, [maxVisibleWave])
 
   useEffect(() => {
     refreshAll()
@@ -124,9 +126,9 @@ export default function OwnershipHistory({ className }: { wave?: number; classNa
                   const disasterAreas = cell?.disasterAreas ?? []
                   return (
                     <td key={wave} className="min-w-28 px-3 py-2 text-slate-700">
-                      {areas.length || disasterAreas.length ? (
+                      {wave > maxVisibleWave ? '-' : areas.length || disasterAreas.length ? (
                         <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1">
-                          {areas.length ? <span>{areas.join(', ')}</span> : <span>-</span>}
+                          {areas.length > 0 && <span>{areas.join(', ')}</span>}
                           {disasterAreas.length > 0 && (
                             <span className="ownership-disaster-areas">
                               {disasterAreas.join(', ')}

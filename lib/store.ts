@@ -2,7 +2,7 @@
 // ============================================================
 // CLIENT-SIDE GAME STATE  (localStorage + BroadcastChannel)
 // ============================================================
-import { GameState, SHEET_ID, WaveSubmission } from './constants'
+import { GameState, SHEET_ID, WaveSubmission, DEFAULT_AMBASSADOR_VISIBILITY, normalizeAmbassadorVisibility } from './constants'
 
 const KEY_GAME_STATE    = 'biggame_state'
 const KEY_SUBMISSIONS   = 'biggame_submissions'
@@ -46,6 +46,7 @@ export const defaultGameState: GameState = {
   gameMode: 'bid',
   gamePhase: 'play',
   showResults: false,
+  ambassadorVisibility: DEFAULT_AMBASSADOR_VISIBILITY,
 }
 
 export function getGameState(): GameState {
@@ -109,6 +110,9 @@ export async function fetchGameStateFromSheet(): Promise<GameState | null> {
       gameMode: gameModeRaw === 'bet' ? 'bet' : 'bid',
       gamePhase: gamePhaseRaw === 'select-disaster' ? 'select-disaster' : 'play',
       showResults: values.get('showResults') === 'true',
+      ambassadorVisibility: normalizeAmbassadorVisibility(
+        values.get('ambassadorVisibility') ? JSON.parse(values.get('ambassadorVisibility') || '{}') : undefined,
+      ),
       updatedAt,
     }
   } catch {

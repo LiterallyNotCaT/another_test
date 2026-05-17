@@ -10,12 +10,13 @@ import { useWaveOwnership } from '@/components/OwnershipHistory'
 import Timer from '@/components/Timer'
 import clsx from 'clsx'
 import { LogOut, Sparkles } from 'lucide-react'
-import { HOUSE_NAMES, SHEET_ID, getBaanPassword, getWaveSheetQuery } from '@/lib/constants'
+import { HOUSE_NAMES, SHEET_ID, getWaveSheetQuery } from '@/lib/constants'
 import {
   getGameState, saveSubmission, getSubmissionsForBaan,
   subscribeStore, getActiveDisasterForWave, setActiveDisaster, startCloudSync,
 } from '@/lib/store'
 import { fetchWaveInfo, writeToSheet } from '@/lib/sheets'
+import { getBaanPasswordFromSheet, passwordSessionToken } from '@/lib/passwords'
 
 const DISASTER_IDS = Array.from({ length: 9 }, (_, i) => i + 1)
 
@@ -25,16 +26,25 @@ function BaanLogin({ onLogin }: { onLogin:(b:number)=>void }) {
   const [pass,  setPass]  = useState('')
   const [err,   setErr]   = useState('')
   const [shake, setShake] = useState(false)
+  const [checkingPassword, setCheckingPassword] = useState(false)
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     const b = parseInt(baan)
     if (isNaN(b)||b<1||b>12) { setErr('กรอกเลขบ้าน 1–12 เท่านั้น'); return }
-    if (pass !== getBaanPassword(b)) {
+    setCheckingPassword(true)
+    const expectedPassword = await getBaanPasswordFromSheet(b, true).catch(error => {
+      console.error(error)
+      return ''
+    })
+    setCheckingPassword(false)
+    if (!expectedPassword || pass !== expectedPassword) {
       setErr('รหัสไม่ถูกต้อง'); setShake(true)
       setTimeout(()=>setShake(false),500); return
     }
-    sessionStorage.setItem('baan_login',String(b)); onLogin(b)
+    sessionStorage.setItem('baan_login',String(b))
+    sessionStorage.setItem('baan_login_token', await passwordSessionToken(`baan:${b}`, expectedPassword))
+    onLogin(b)
   }
 
   return (
@@ -62,11 +72,11 @@ function BaanLogin({ onLogin }: { onLogin:(b:number)=>void }) {
           <div>
             <label className="text-label block mb-2">รหัสผ่าน</label>
             <input type="password" value={pass}
-              onChange={e=>setPass(e.target.value)} placeholder="Baan X"
+              onChange={e=>setPass(e.target.value)} placeholder="รหัสผ่าน"
               className="input-base text-center font-mono tracking-[0.3em]" />
           </div>
           {err && <p className="text-xs text-red-400 text-center">{err}</p>}
-          <button type="submit" className="btn w-full py-2.5 text-sm font-semibold"
+          <button type="submit" disabled={checkingPassword} className="btn w-full py-2.5 text-sm font-semibold"
             style={{ background:'linear-gradient(135deg,#7c3aed,#a78bfa)', boxShadow:'0 0 20px rgba(124,58,237,0.3)' }}>
             เข้าสู่เกม
           </button>
@@ -391,10 +401,10 @@ function BiddingGame({ baan }: { baan:number }) {
             </div>
             {!isBetMode && (
               <div className="ml-auto">
-                <GroupChat baan={baan} />
+                <GroupChat actor={baan} />
               </div>
             )}
-            <button onClick={()=>{sessionStorage.removeItem('baan_login');window.location.reload()}}
+            <button onClick={()=>{sessionStorage.removeItem('baan_login');sessionStorage.removeItem('baan_login_token');window.location.reload()}}
               className={clsx('btn btn-ghost', isBetMode && 'ml-auto')}>
               <LogOut size={14} /> Logout
             </button>
@@ -548,12 +558,23 @@ export default function BiddingPage() {
   const [checking, setChecking] = useState(true)
   useEffect(() => startCloudSync(800), [])
   useEffect(()=>{
-    const t = setTimeout(() => {
+    let cancelled = false
+    const t = setTimeout(async () => {
       const s=sessionStorage.getItem('baan_login')
-      if(s) setBaan(parseInt(s))
-      setChecking(false)
+      const storedBaan = s ? parseInt(s) : NaN
+      if(storedBaan >= 1 && storedBaan <= 12) {
+        const password = await getBaanPasswordFromSheet(storedBaan).catch(() => '')
+        const token = password ? await passwordSessionToken(`baan:${storedBaan}`, password) : ''
+        if (!cancelled && token && sessionStorage.getItem('baan_login_token') === token) {
+          setBaan(storedBaan)
+        } else {
+          sessionStorage.removeItem('baan_login')
+          sessionStorage.removeItem('baan_login_token')
+        }
+      }
+      if(!cancelled) setChecking(false)
     }, 0)
-    return () => clearTimeout(t)
+    return () => { cancelled = true; clearTimeout(t) }
   },[])
   if (checking) return (
     <div className="min-h-screen app-shell flex items-center justify-center">

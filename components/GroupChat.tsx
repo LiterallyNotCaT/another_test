@@ -4,7 +4,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import { MessageCircle, Send, X } from 'lucide-react'
 import { HOUSE_COLORS, HOUSE_NAMES } from '@/lib/constants'
-import { fetchGroupChatMessages, sendGroupChatMessage, type GroupChatMessage } from '@/lib/sheets'
+import {
+  fetchGroupChatMessages,
+  markGroupChatRead,
+  sendGroupChatMessage,
+  type GroupChatActor,
+  type GroupChatMessage,
+} from '@/lib/sheets'
 
 function formatChatTime(raw: string) {
   const dateParts = raw.match(/^Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?\)$/)
@@ -19,12 +25,26 @@ function formatChatTime(raw: string) {
     )
     : new Date(raw)
   if (!Number.isNaN(date.getTime())) {
-    return date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
   }
   return raw
 }
 
-export default function GroupChat({ baan }: { baan: number }) {
+function actorKey(actor: GroupChatActor) {
+  return String(actor)
+}
+
+function isSameActor(message: GroupChatMessage, actor: GroupChatActor) {
+  return actor === 'admin'
+    ? message.sender.toLowerCase() === 'admin'
+    : message.baan === actor
+}
+
+function actorLabel(actor: GroupChatActor) {
+  return actor === 'admin' ? 'admin' : HOUSE_NAMES[actor]
+}
+
+export default function GroupChat({ actor, label }: { actor: GroupChatActor; label?: string }) {
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState<GroupChatMessage[]>([])
   const [draft, setDraft] = useState('')
@@ -34,6 +54,7 @@ export default function GroupChat({ baan }: { baan: number }) {
   const seenLatestRef = useRef('')
   const initializedRef = useRef(false)
   const listRef = useRef<HTMLDivElement | null>(null)
+  const actorId = actorKey(actor)
 
   const refresh = useCallback(async () => {
     try {
@@ -73,13 +94,33 @@ export default function GroupChat({ baan }: { baan: number }) {
     })
   }, [open, messages])
 
+  useEffect(() => {
+    if (!open || !messages.length) return
+    const storageKey = `biggame_chat_read_${actorId}`
+    let readRows: number[] = []
+    try { readRows = JSON.parse(localStorage.getItem(storageKey) || '[]') } catch {}
+    const readSet = new Set(readRows)
+    const rowsToMark = messages
+      .filter(message => !isSameActor(message, actor) && !readSet.has(message.row))
+      .map(message => message.row)
+    if (!rowsToMark.length) return
+
+    rowsToMark.forEach(row => readSet.add(row))
+    localStorage.setItem(storageKey, JSON.stringify(Array.from(readSet).slice(-400)))
+    setMessages(prev => prev.map(message => rowsToMark.includes(message.row)
+      ? { ...message, readCount: Math.min(13, message.readCount + 1) }
+      : message
+    ))
+    void markGroupChatRead(actor, rowsToMark)
+  }, [actor, actorId, messages, open])
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     const message = draft.trim()
     if (!message || sending) return
     setSending(true)
     setDraft('')
-    const result = await sendGroupChatMessage(baan, message)
+    const result = await sendGroupChatMessage(actor, message)
     if (!result.ok) setError(result.message ?? 'Cannot send message')
     await refresh()
     setSending(false)
@@ -89,7 +130,7 @@ export default function GroupChat({ baan }: { baan: number }) {
     <>
       <button type="button" onClick={() => setOpen(true)} className="btn btn-ghost group-chat-trigger" aria-label="Open group chat">
         <MessageCircle size={15} />
-        Group chat
+        {label ?? 'Group chat'}
         {unread && <span className="group-chat-dot" />}
       </button>
 
@@ -99,7 +140,7 @@ export default function GroupChat({ baan }: { baan: number }) {
             <div className="group-chat-header">
               <div>
                 <div className="group-chat-title">Group chat</div>
-                <div className="group-chat-subtitle">{HOUSE_NAMES[baan]}</div>
+                <div className="group-chat-subtitle">{actorLabel(actor)}</div>
               </div>
               <button type="button" onClick={() => setOpen(false)} className="group-chat-close" aria-label="Close group chat">
                 <X size={18} />
@@ -108,17 +149,20 @@ export default function GroupChat({ baan }: { baan: number }) {
 
             <div ref={listRef} className="group-chat-list">
               {messages.map(message => {
-                const isMine = message.baan === baan
-                const color = message.baan ? HOUSE_COLORS[message.baan] : '#64748b'
+                const isMine = isSameActor(message, actor)
+                const color = message.sender.toLowerCase() === 'admin'
+                  ? '#111827'
+                  : message.baan ? HOUSE_COLORS[message.baan] : '#64748b'
                 return (
                   <div key={message.id} className={clsx('group-chat-message-row', isMine && 'is-mine')}>
                     <div className="group-chat-message-meta">
-                      <span style={{ color }}>{message.baan ? HOUSE_NAMES[message.baan] : 'Unknown'}</span>
+                      <span style={{ color }}>{message.sender.toLowerCase() === 'admin' ? 'admin' : message.baan ? HOUSE_NAMES[message.baan] : 'Unknown'}</span>
                       <span>{formatChatTime(message.timestamp)}</span>
                     </div>
                     <div className={clsx('group-chat-bubble', isMine && 'is-mine')} style={isMine ? { background: color } : undefined}>
                       {message.message}
                     </div>
+                    <div className="group-chat-read">อ่านแล้ว {message.readCount}</div>
                   </div>
                 )
               })}

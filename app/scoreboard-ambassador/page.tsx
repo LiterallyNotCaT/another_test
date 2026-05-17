@@ -1,30 +1,40 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type ReactNode } from 'react'
 import AuthGuard from '@/components/AuthGuard'
 import HomeButton from '@/components/HomeButton'
 import FinanceHistory from '@/components/FinanceHistory'
 import FullscreenButton from '@/components/FullscreenButton'
 import GameMap from '@/components/GameMap'
+import LieHistory from '@/components/LieHistory'
 import OwnershipHistory, { useWaveOwnership } from '@/components/OwnershipHistory'
 import SharedScoreboard from '@/components/SharedScoreboard'
 import Timer from '@/components/Timer'
 import clsx from 'clsx'
-import { Map, History, Trophy } from 'lucide-react'
-import { TOTAL_WAVES } from '@/lib/constants'
+import { Map, History, Trophy, MessageSquareWarning } from 'lucide-react'
+import { TOTAL_WAVES, normalizeAmbassadorVisibility, type AmbassadorTabKey } from '@/lib/constants'
 import { AFTERNOON_SCORE_CSV_URL } from '@/lib/scoreboardSources'
 import { getGameState, subscribeStore, getActiveDisasterForWave, setActiveDisaster, startCloudSync } from '@/lib/store'
 import { fetchWaveInfo } from '@/lib/sheets'
 
 const DISASTER_IDS = Array.from({ length: 9 }, (_, i) => i + 1)
+const TAB_META: Array<{ key: AmbassadorTabKey; label: string; icon: ReactNode }> = [
+  { key: 'map', label: 'MAP', icon: <Map size={14}/> },
+  { key: 'history', label: 'HISTORY', icon: <History size={14}/> },
+  { key: 'scoreboard', label: 'SCORE', icon: <Trophy size={14}/> },
+  { key: 'ownership', label: 'Ownership', icon: <Map size={14}/> },
+  { key: 'lieHistory', label: 'Lie History', icon: <MessageSquareWarning size={14}/> },
+]
 
 function AmbassadorContent() {
-  const [tab,         setTab]         = useState<'map'|'history'|'ownership'|'scoreboard'>('map')
+  const [tab,         setTab]         = useState<AmbassadorTabKey>('map')
   const [selWave,     setSelWave]     = useState(() => getGameState().currentWave)
   const [filterDis,   setFilterDis]   = useState<number|null>(null)
   const [currentKing, setCurrentKing]  = useState<number|null>(null)
   const [gs,          setGS]          = useState(getGameState)
   const [isLoaded]                    = useState(true)
   const sheetOwnership = useWaveOwnership(selWave)
+  const ambassadorVisibility = normalizeAmbassadorVisibility(gs.ambassadorVisibility)
+  const visibleTabs = TAB_META.filter(item => ambassadorVisibility.tabs[item.key])
 
   useEffect(()=>{
     if (!isLoaded) return
@@ -45,6 +55,11 @@ function AmbassadorContent() {
       .catch(console.error)
     return () => { cancelled = true }
   }, [selWave])
+
+  useEffect(() => {
+    if (ambassadorVisibility.tabs[tab]) return
+    setTab(visibleTabs[0]?.key ?? 'map')
+  }, [ambassadorVisibility.tabs, tab, visibleTabs])
 
   if (!isLoaded) return (
     <div className="wire-page-full ambassador-fullscreen">
@@ -73,34 +88,24 @@ function AmbassadorContent() {
               <FullscreenButton targetId="ambassador-main-fullscreen" />
               <div className="wire-panel-body ambassador-tab-body">
                 <div className="ambassador-tabs flex flex-wrap items-center gap-2">
-                  <button onClick={()=>setTab('map')}
-                    className={clsx('btn', tab==='map' ? 'btn-primary' : 'btn-ghost')}>
-                    <Map size={14}/> MAP
-                  </button>
-                  <button onClick={()=>setTab('history')}
-                    className={clsx('btn', tab==='history' ? 'btn-primary' : 'btn-ghost')}>
-                    <History size={14}/> HISTORY
-                  </button>
-                  <button onClick={()=>setTab('scoreboard')}
-                    className={clsx('btn', tab==='scoreboard' ? 'btn-primary' : 'btn-ghost')}>
-                    <Trophy size={14}/> SCORE
-                  </button>
-                  <button onClick={()=>setTab('ownership')}
-                    className={clsx('btn', tab==='ownership' ? 'btn-primary' : 'btn-ghost')}>
-                    Ownership
-                  </button>
+                  {visibleTabs.map(item => (
+                    <button key={item.key} onClick={()=>setTab(item.key)}
+                      className={clsx('btn', tab===item.key ? 'btn-primary' : 'btn-ghost')}>
+                      {item.icon} {item.label}
+                    </button>
+                  ))}
                 </div>
 
-                {!gs.showResults && tab !== 'map' ? (
-                  <div className="ambassador-tab-view result-locked-panel">
+                {!visibleTabs.length ? (
+                  <div className="ambassador-tab-view">
                     <div className="wire-panel colorful-box colorful-box-sky bg-white p-6 text-center">
-                      <div className="text-label">Result hidden</div>
+                      <div className="text-label">Tabs hidden</div>
                       <div className="mt-2 text-sm font-semibold text-slate-700">
-                        Admin has not shown this wave result yet.
+                        Admin has hidden all ambassador tabs.
                       </div>
                     </div>
                   </div>
-                ) : tab==='map' ? (
+                ) : tab==='map' && ambassadorVisibility.tabs.map ? (
                   <div className="ambassador-tab-view ambassador-map-view">
                     <div className="map-wave-filter flex flex-wrap gap-2">
                       {Array.from({length:TOTAL_WAVES},(_,i)=>i+1).map(w=>(
@@ -128,15 +133,19 @@ function AmbassadorContent() {
                       )}
                     </div>
                   </div>
-                ) : tab==='history' ? (
+                ) : tab==='history' && ambassadorVisibility.tabs.history ? (
                   <div className="ambassador-tab-view space-y-3">
-                    <FinanceHistory showResults={gs.showResults === true} />
+                    <FinanceHistory showResults />
                   </div>
-                ) : tab==='ownership' ? (
+                ) : tab==='ownership' && ambassadorVisibility.tabs.ownership ? (
                   <div className="ambassador-tab-view space-y-3">
-                    <OwnershipHistory />
+                    <OwnershipHistory visibleThroughWave={gs.currentWave} />
                   </div>
-                ) : (
+                ) : tab==='lieHistory' && ambassadorVisibility.tabs.lieHistory ? (
+                  <div className="ambassador-tab-view space-y-3">
+                    <LieHistory />
+                  </div>
+                ) : tab==='scoreboard' && ambassadorVisibility.tabs.scoreboard ? (
                   <div className="ambassador-tab-view">
                     <SharedScoreboard
                       title="Afternoon Scoreboard"
@@ -144,9 +153,12 @@ function AmbassadorContent() {
                       bgColor="bg-[#9cd4f7]"
                       csvUrlTotal={AFTERNOON_SCORE_CSV_URL}
                       showDetails={false}
+                      showNumbers={ambassadorVisibility.scoreboardNumbers}
                       mode="embedded"
                     />
                   </div>
+                ) : (
+                  <div className="ambassador-tab-view" />
                 )}
               </div>
             </div>
@@ -160,7 +172,7 @@ function AmbassadorContent() {
 
 export default function AmbassadorPage() {
   return (
-    <AuthGuard pageKey="web4" expectedPassword="web4"
+    <AuthGuard pageKey="web4"
       title="ห้องทูต" subtitle="กรอกรหัสเพื่อดู Scoreboard"
       accentColor="#10b981">
       <AmbassadorContent />

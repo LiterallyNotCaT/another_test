@@ -12,15 +12,6 @@ export const getWaveSheetQuery = (wave: number) =>
     ? `gid=${WAVE_GIDS[wave]}`
     : `sheet=${encodeURIComponent(`Wave ${wave}`)}`
 
-// Password config
-export const PASSWORDS: Record<string, string> = {
-  web1: 'web1',
-  web4: 'web4',
-  web5: 'web5',
-  // web3 passwords per house: 'Baan 1' .. 'Baan 12'
-}
-export const getBaanPassword = (baan: number) => `Baan ${baan}`
-
 // Areas
 export const AREAS = {
   A: ['A1','A2','A3','A4','A5'],
@@ -108,7 +99,42 @@ export interface GameState {
   gameMode?: 'bid' | 'bet'
   gamePhase?: 'play' | 'select-disaster'
   showResults?: boolean
+  ambassadorVisibility?: AmbassadorVisibility
   updatedAt?: string
+}
+
+export type AmbassadorTabKey = 'map' | 'history' | 'ownership' | 'lieHistory' | 'scoreboard'
+
+export interface AmbassadorVisibility {
+  tabs: Record<AmbassadorTabKey, boolean>
+  scoreboardNumbers: boolean
+}
+
+export const DEFAULT_AMBASSADOR_VISIBILITY: AmbassadorVisibility = {
+  tabs: {
+    map: true,
+    history: false,
+    ownership: true,
+    lieHistory: false,
+    scoreboard: true,
+  },
+  scoreboardNumbers: true,
+}
+
+export function normalizeAmbassadorVisibility(value?: Partial<AmbassadorVisibility> | null): AmbassadorVisibility {
+  const tabs = (value?.tabs ?? {}) as Partial<Record<AmbassadorTabKey, boolean>>
+  return {
+    tabs: {
+      map: tabs.map === undefined ? DEFAULT_AMBASSADOR_VISIBILITY.tabs.map : tabs.map === true,
+      history: tabs.history === undefined ? DEFAULT_AMBASSADOR_VISIBILITY.tabs.history : tabs.history === true,
+      ownership: tabs.ownership === undefined ? DEFAULT_AMBASSADOR_VISIBILITY.tabs.ownership : tabs.ownership === true,
+      lieHistory: tabs.lieHistory === undefined ? DEFAULT_AMBASSADOR_VISIBILITY.tabs.lieHistory : tabs.lieHistory === true,
+      scoreboard: tabs.scoreboard === undefined ? DEFAULT_AMBASSADOR_VISIBILITY.tabs.scoreboard : tabs.scoreboard === true,
+    },
+    scoreboardNumbers: value?.scoreboardNumbers === undefined
+      ? DEFAULT_AMBASSADOR_VISIBILITY.scoreboardNumbers
+      : value.scoreboardNumbers === true,
+  }
 }
 
 export interface LeaderboardEntry {

@@ -213,44 +213,90 @@ export async function fetchWaveInputs(wave: number): Promise<{ rows: WaveInputRo
 
 export interface GroupChatMessage {
   id: string
+  row: number
   timestamp: string
+  sender: string
   baan: number | null
+  readCount: number
   message: string
 }
 
+export type GroupChatActor = number | 'admin'
+
 export async function fetchGroupChatMessages(): Promise<GroupChatMessage[]> {
-  const rows = await fetchGidRangeGViz(CHAT_GID, 'A2:C')
+  const rows = await fetchGidRangeGViz(CHAT_GID, 'A2:D')
   const messages: GroupChatMessage[] = []
   for (let i = 0; i < rows.length; i++) {
     const timestamp = String(rows[i]?.[0] ?? '').trim()
     const baanRaw = String(rows[i]?.[1] ?? '').trim()
     const message = String(rows[i]?.[2] ?? '').trim()
+    const readCount = parseInt(String(rows[i]?.[3] ?? ''))
     if (!timestamp && !baanRaw && !message) break
     const baan = parseInt(baanRaw)
+    const isAdmin = baanRaw.toLowerCase() === 'admin'
     messages.push({
-      id: `${i}-${timestamp}-${baanRaw}-${message}`,
+      id: `${i + 2}-${timestamp}-${baanRaw}-${message}`,
+      row: i + 2,
       timestamp,
+      sender: isAdmin ? 'admin' : baanRaw,
       baan: !isNaN(baan) && baan >= 1 && baan <= 12 ? baan : null,
+      readCount: Number.isFinite(readCount) ? Math.max(0, Math.min(13, readCount)) : 0,
       message,
     })
   }
   return messages
 }
 
-export async function sendGroupChatMessage(baan: number, message: string): Promise<{ ok: boolean; message?: string }> {
+export async function sendGroupChatMessage(actor: GroupChatActor, message: string): Promise<{ ok: boolean; message?: string }> {
   if (!GAS_URL) return { ok: false, message: 'GAS URL not configured' }
   try {
     await fetch(GAS_URL, {
       method: 'POST',
       mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'writeChat', baan, message }),
+      body: JSON.stringify({ action: 'writeChat', actor, baan: actor, message }),
     })
     return { ok: true, message: 'Sent' }
   } catch (e) {
     console.error('sendGroupChatMessage:', e)
     return { ok: false, message: String(e) }
   }
+}
+
+export async function markGroupChatRead(actor: GroupChatActor, rows: number[]): Promise<{ ok: boolean; message?: string }> {
+  if (!GAS_URL || !rows.length) return { ok: false, message: 'No rows to mark' }
+  try {
+    await fetch(GAS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'markChatRead', actor, rows }),
+    })
+    return { ok: true }
+  } catch (e) {
+    console.error('markGroupChatRead:', e)
+    return { ok: false, message: String(e) }
+  }
+}
+
+export function parseAreaTokens(value: string): string[] {
+  const matches = String(value || '').toUpperCase().match(/KING|[ABC]\s*\d+/g) ?? []
+  return Array.from(new Set(matches.map(token => token.replace(/\s+/g, ''))))
+}
+
+export interface LieHistoryCell {
+  baan: number
+  promises: string[]
+  actual: string[]
+}
+
+export async function fetchLieHistoryWave(wave: number): Promise<LieHistoryCell[]> {
+  const rows = await fetchWaveRangeGViz(wave, 'R20:U31')
+  return rows.slice(0, 12).map((row, i) => ({
+    baan: i + 1,
+    promises: parseAreaTokens(String(row?.[0] ?? '')),
+    actual: parseAreaTokens(String(row?.[3] ?? '')),
+  }))
 }
 
 // ── READ: King info for a wave ─────────────────────────────

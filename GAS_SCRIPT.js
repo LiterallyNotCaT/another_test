@@ -49,6 +49,9 @@ function doPost(e) {
     } else if (payload.action === 'writeChat') {
       const result = handleWriteChat(payload)
       output.setContent(JSON.stringify(result))
+    } else if (payload.action === 'markChatRead') {
+      const result = handleMarkChatRead(payload)
+      output.setContent(JSON.stringify(result))
     } else if (payload.action === 'writeGameState') {
       const result = handleWriteGameState(payload.state || {})
       output.setContent(JSON.stringify(result))
@@ -63,9 +66,10 @@ function doPost(e) {
 }
 
 function handleWriteChat(payload) {
-  const baan = Number(payload.baan)
+  const rawActor = payload.actor !== undefined ? payload.actor : payload.baan
+  const actor = normalizeChatActor_(rawActor)
   const message = String(payload.message || '').trim()
-  if (!baan || baan < 1 || baan > 12) return { status: 'error', message: 'Invalid baan' }
+  if (!actor) return { status: 'error', message: 'Invalid chat actor' }
   if (!message) return { status: 'error', message: 'Message is blank' }
 
   const ss = SpreadsheetApp.openById(SHEET_ID)
@@ -80,13 +84,44 @@ function handleWriteChat(payload) {
     if (emptyIndex >= 0) targetRow = 2 + emptyIndex
   }
 
-  sheet.getRange(targetRow, 1, 1, 3).setValues([[
+  sheet.getRange(targetRow, 1, 1, 4).setValues([[
     new Date(),
-    baan,
+    actor,
     message.slice(0, 500),
+    1,
   ]])
   SpreadsheetApp.flush()
   return { status: 'ok', row: targetRow }
+}
+
+function handleMarkChatRead(payload) {
+  const actor = normalizeChatActor_(payload.actor)
+  if (!actor) return { status: 'error', message: 'Invalid chat actor' }
+
+  const rows = Array.isArray(payload.rows)
+    ? payload.rows.map(Number).filter(row => row >= 2 && row <= 1000)
+    : []
+  if (!rows.length) return { status: 'ok', updated: 0 }
+
+  const ss = SpreadsheetApp.openById(SHEET_ID)
+  const sheet = getSheetByGid_(ss, CHAT_GID)
+  if (!sheet) return { status: 'error', message: `Chat sheet gid ${CHAT_GID} not found` }
+
+  const uniqueRows = [...new Set(rows)]
+  uniqueRows.forEach(row => {
+    const current = Number(sheet.getRange(row, 4).getValue()) || 0
+    sheet.getRange(row, 4).setValue(Math.min(13, current + 1))
+  })
+  SpreadsheetApp.flush()
+  return { status: 'ok', updated: uniqueRows.length }
+}
+
+function normalizeChatActor_(actor) {
+  const raw = String(actor || '').trim()
+  if (raw.toLowerCase() === 'admin') return 'admin'
+  const baan = Number(raw)
+  if (baan >= 1 && baan <= 12) return baan
+  return ''
 }
 
 // Allow GET for health check
@@ -122,6 +157,7 @@ function handleWriteGameState(state) {
     ['gameMode', state.gameMode === 'bet' ? 'bet' : 'bid'],
     ['gamePhase', state.gamePhase === 'select-disaster' ? 'select-disaster' : 'play'],
     ['showResults', state.showResults === true ? 'true' : 'false'],
+    ['ambassadorVisibility', JSON.stringify(state.ambassadorVisibility || {})],
     ['updatedAt', state.updatedAt || new Date().toISOString()],
   ]
   sheet.getRange(1, 1, rows.length, 2).setValues(rows)

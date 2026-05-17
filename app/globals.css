@@ -2212,16 +2212,37 @@ form .btn.w-full {
 
 .auth-page {
   padding: clamp(28px, 6vh, 76px) clamp(18px, 5vw, 72px) !important;
+  background:
+    linear-gradient(135deg, rgba(219,234,254,0.95), rgba(245,243,255,0.95) 46%, rgba(236,253,245,0.95)),
+    #eef4ff !important;
 }
 .auth-card {
   max-width: min(92vw, 30rem) !important;
-  padding: clamp(24px, 4vw, 36px) !important;
+  border: 1px solid rgba(148,163,184,0.28) !important;
+  border-radius: 22px !important;
+  background: rgba(255,255,255,0.92) !important;
+  padding: clamp(26px, 4vw, 38px) !important;
+  box-shadow: 0 24px 70px rgba(30,41,59,0.16) !important;
 }
 .auth-card .input-base {
   margin-block: 8px 10px;
-  min-height: 48px;
+  min-height: 52px;
+  border-radius: 14px;
+  font-size: 1rem;
+  background: #f8fafc;
 }
-.auth-card .btn { min-height: 48px; }
+.auth-card .btn {
+  min-height: 52px;
+  border-radius: 14px;
+  font-size: 0.95rem;
+  font-weight: 900;
+}
+.auth-card h1 {
+  color: #0f172a !important;
+}
+.auth-card p {
+  color: #64748b !important;
+}
 .home-button {
   min-height: 36px;
   padding-inline: 16px !important;
@@ -2355,6 +2376,7 @@ form .btn.w-full {
 .admin-sheet-row {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
   margin-bottom: 8px;
 }
 .admin-sheet-button {
@@ -2994,8 +3016,9 @@ form .btn.w-full {
 .game-map .map-group-header .min-w-0 {
   display: flex !important;
   min-width: 0 !important;
-  align-items: center !important;
-  gap: 4px !important;
+  align-items: flex-start !important;
+  flex-direction: column !important;
+  gap: 3px !important;
   flex-wrap: nowrap !important;
 }
 .game-map .map-group-header .w-7 {
@@ -3004,7 +3027,7 @@ form .btn.w-full {
   border-radius: 8px !important;
 }
 .game-map .map-group-header .font-semibold { font-size: 0.72rem !important; line-height: 1 !important; white-space: nowrap !important; }
-.game-map .map-group-meta { display: flex !important; gap: 5px !important; flex-wrap: nowrap !important; margin-left: 4px !important; }
+.game-map .map-group-meta { display: flex !important; gap: 4px !important; flex-wrap: wrap !important; margin: 0 !important; }
 .game-map .map-group-meta .badge { padding: 2px 5px !important; font-size: 0.46rem !important; white-space: nowrap !important; }
 .game-map .map-tile-grid,
 .map-unified-board .map-tile-grid {
@@ -3071,6 +3094,64 @@ form .btn.w-full {
   text-decoration-line: line-through;
   text-decoration-thickness: 2px;
   text-decoration-color: #dc2626;
+}
+
+.lie-history table,
+.ownership-history table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.lie-cell {
+  display: grid;
+  gap: 8px;
+}
+.lie-cell-label {
+  margin-bottom: 3px;
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+.lie-token-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.lie-token {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border-radius: 7px;
+  padding: 2px 7px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+.lie-token-honest {
+  border: 1px solid #86efac;
+  background: #dcfce7;
+  color: #15803d;
+}
+.lie-token-lie {
+  border: 1px solid #fca5a5;
+  background: #fee2e2;
+  color: #b91c1c;
+}
+.lie-actual-text {
+  color: #334155;
+  font-weight: 700;
+}
+
+.shared-scoreboard-hidden-score {
+  display: inline-flex;
+  min-width: 5.5rem;
+  justify-content: center;
+  border-radius: 999px;
+  background: #f1f5f9;
+  padding: 0.35rem 0.7rem;
+  color: #64748b;
+  font-size: clamp(0.95rem, 1.6vw, 1.25rem);
 }
 
 .group-chat-trigger {
@@ -3177,6 +3258,12 @@ form .btn.w-full {
   border-color: transparent;
   border-radius: 14px 14px 4px 14px;
   color: #fff;
+}
+.group-chat-read {
+  padding: 0 4px;
+  font-size: 0.66rem;
+  font-weight: 800;
+  color: #64748b;
 }
 .group-chat-empty {
   margin: auto;

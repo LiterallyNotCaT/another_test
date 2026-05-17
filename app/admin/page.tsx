@@ -5,6 +5,7 @@ import HomeButton from '@/components/HomeButton'
 import GameMap from '@/components/GameMap'
 import FinanceHistory from '@/components/FinanceHistory'
 import FullscreenButton from '@/components/FullscreenButton'
+import GroupChat from '@/components/GroupChat'
 import OwnershipHistory, { useWaveOwnership } from '@/components/OwnershipHistory'
 import SharedScoreboard from '@/components/SharedScoreboard'
 import Timer from '@/components/Timer'
@@ -14,7 +15,10 @@ import {
   Zap, Map, History, Trophy,
   LayoutDashboard, CheckCircle2, Clock, ExternalLink,
 } from 'lucide-react'
-import { HOUSE_COLORS, HOUSE_NAMES, SHEET_BASE, TOTAL_WAVES } from '@/lib/constants'
+import {
+  HOUSE_COLORS, HOUSE_NAMES, SHEET_BASE, TOTAL_WAVES,
+  normalizeAmbassadorVisibility, type AmbassadorTabKey,
+} from '@/lib/constants'
 import { AFTERNOON_SCORE_CSV_URL } from '@/lib/scoreboardSources'
 import { fetchWaveInputs, type WaveInputRow } from '@/lib/sheets'
 import {
@@ -26,6 +30,13 @@ const BID_PLAY_MINUTES = 10
 const BET_PLAY_MINUTES = 2
 const DISASTER_SELECT_MINUTES = 3
 type WaveMeta = { king: number | null; disaster: number | null }
+const AMBASSADOR_TAB_CONTROLS: Array<{ key: AmbassadorTabKey; label: string }> = [
+  { key: 'scoreboard', label: 'Scoreboard' },
+  { key: 'map', label: 'Map' },
+  { key: 'ownership', label: 'Ownership' },
+  { key: 'history', label: 'Finance history' },
+  { key: 'lieHistory', label: 'Lie history' },
+]
 
 function AdminContent() {
   const [gs,          setGS]          = useState(getGameState())
@@ -185,6 +196,19 @@ function AdminContent() {
   const localSubmissionsCurrent = getSubmissionsForWave(submissionWave)
   const currentWaveMeta = waveMeta[gs.currentWave] ?? { king: null, disaster: null }
   const viewedWaveMeta = waveMeta[submissionWave] ?? { king: null, disaster: null }
+  const ambassadorVisibility = normalizeAmbassadorVisibility(gs.ambassadorVisibility)
+  const setAmbassadorVisibility = (patch: Parameters<typeof normalizeAmbassadorVisibility>[0]) => {
+    applyGS({ ambassadorVisibility: normalizeAmbassadorVisibility(patch) })
+  }
+  const toggleAmbassadorTab = (key: AmbassadorTabKey) => {
+    setAmbassadorVisibility({
+      ...ambassadorVisibility,
+      tabs: {
+        ...ambassadorVisibility.tabs,
+        [key]: !ambassadorVisibility.tabs[key],
+      },
+    })
+  }
 
   // ── Toast color ─────────────────────────────────────────
   const toastStyle = toast?.type==='err'
@@ -355,6 +379,7 @@ function AdminContent() {
                       bgColor="bg-[#9cd4f7]"
                       csvUrlTotal={AFTERNOON_SCORE_CSV_URL}
                       showDetails={false}
+                      showNumbers
                       mode="embedded"
                     />
                   </div>
@@ -367,6 +392,7 @@ function AdminContent() {
                 <a href={SHEET_BASE} target="_blank" rel="noreferrer" className="btn btn-ghost admin-sheet-button">
                   <ExternalLink size={14} /> Sheet
                 </a>
+                <GroupChat actor="admin" label="Chat" />
               </div>
               <div className="wire-panel wire-panel-green wire-sidebar-fill">
               <div className="admin-control-panel w-full space-y-4">
@@ -427,6 +453,32 @@ function AdminContent() {
                     {gs.showResults ? 'Hide result' : 'Show result'}
                   </button>
                 </div>
+                <div className="wire-panel admin-ambassador-visibility-card bg-white p-3">
+                  <div className="mb-2">
+                    <div className="font-display text-sm font-bold text-slate-800">Ambassador visibility</div>
+                    <div className="text-2xs font-semibold text-slate-500">Choose what players can see.</div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {AMBASSADOR_TAB_CONTROLS.map(item => (
+                      <button
+                        key={item.key}
+                        onClick={() => toggleAmbassadorTab(item.key)}
+                        className={clsx('btn min-h-10 px-2 text-xs', ambassadorVisibility.tabs[item.key] ? 'btn-success' : 'btn-ghost')}
+                      >
+                        {ambassadorVisibility.tabs[item.key] ? 'Show' : 'Hide'} {item.label}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => setAmbassadorVisibility({
+                        ...ambassadorVisibility,
+                        scoreboardNumbers: !ambassadorVisibility.scoreboardNumbers,
+                      })}
+                      className={clsx('btn min-h-10 px-2 text-xs', ambassadorVisibility.scoreboardNumbers ? 'btn-success' : 'btn-ghost')}
+                    >
+                      {ambassadorVisibility.scoreboardNumbers ? 'Show' : 'Hide'} score numbers
+                    </button>
+                  </div>
+                </div>
                 <button onClick={processWave} disabled={processing} className="btn btn-primary w-full">
                   <Zap size={15}/> Refresh Sheet Wave {gs.currentWave}
                 </button>
@@ -443,7 +495,7 @@ function AdminContent() {
 
 export default function AdminPage() {
   return (
-    <AuthGuard pageKey="web5" expectedPassword="web5"
+    <AuthGuard pageKey="web5"
       title="Admin Panel" subtitle="กรอกรหัส Admin เพื่อเข้าสู่ระบบ"
       accentColor="#3b82f6">
       <AdminContent />

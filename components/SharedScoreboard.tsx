@@ -13,6 +13,7 @@ type SharedScoreboardProps = {
   csvUrlUpper?: string;
   csvUrlTotal?: string;
   showDetails?: boolean;
+  showNumbers?: boolean;
   mode?: 'fullscreen' | 'embedded';
 };
 
@@ -98,6 +99,7 @@ export default function SharedScoreboard({
   csvUrlUpper,
   csvUrlTotal,
   showDetails = true,
+  showNumbers = true,
   mode = 'fullscreen',
 }: SharedScoreboardProps) {
 
@@ -253,7 +255,7 @@ export default function SharedScoreboard({
                     <p className={`text-3xl lg:text-4xl font-black tabular-nums tracking-tight ${
                       isTop1 ? 'text-yellow-500' : isTop2 ? 'text-slate-600' : isTop3 ? 'text-amber-700' : 'text-gray-800'
                     }`}>
-                      <AnimatedNumber value={house.totalScore} />
+                      {showNumbers ? <AnimatedNumber value={house.totalScore} /> : <span className="shared-scoreboard-hidden-score">Hidden</span>}
                     </p>
                   </div>
                 </motion.li>
