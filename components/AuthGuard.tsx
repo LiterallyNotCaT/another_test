@@ -116,7 +116,7 @@ export default function AuthGuard({
               boxShadow: `0 14px 30px ${accentColor}30`,
             }}
           >
-            {passwordReady ? 'เข้าสู่ระบบ' : 'Loading password...'}
+            {passwordReady ? 'เข้าสู่ระบบ' : 'Password sheet unavailable'}
           </button>
         </form>
       </div>
