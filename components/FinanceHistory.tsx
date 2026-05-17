@@ -315,7 +315,7 @@ function FinanceHistory({
           revealResult: isCurrentWave,
         }))
 
-        if (revealWave && (wave === 2 || wave === 4) && ladderAmount !== 0) {
+        if (revealWave && (wave === 2 || wave === 4)) {
           nextEntries.push({
             order: wave * 100 + 45,
             wave,
