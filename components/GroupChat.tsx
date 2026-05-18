@@ -52,6 +52,12 @@ function chatTargetOptions(actor: GroupChatActor, includeAll = false) {
   ]
 }
 
+function sendOptionsForChannel(actor: GroupChatActor, channelFilter: string) {
+  const options = chatTargetOptions(actor)
+  if (channelFilter === 'all' || channelFilter === 'public') return options
+  return options.filter(option => option.value === channelFilter)
+}
+
 function messageChannelForActor(message: GroupChatMessage, actor: GroupChatActor) {
   const target = message.sendTo || 'public'
   if (target === 'public') return 'public'
@@ -111,8 +117,8 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
   const seenLatestRef = useRef('')
   const initializedRef = useRef(false)
   const listRef = useRef<HTMLDivElement | null>(null)
-  const sendTargetOptions = useMemo(() => chatTargetOptions(actor), [actor])
   const channelOptions = useMemo(() => chatTargetOptions(actor, true), [actor])
+  const sendTargetOptions = useMemo(() => sendOptionsForChannel(actor, channelFilter), [actor, channelFilter])
   const viewableMessages = useMemo(
     () => messages.filter(message => canViewMessage(message, actor)),
     [actor, messages]
@@ -126,10 +132,21 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
     [viewableMessages]
   )
   const lockedReplyTarget = replyTo ? privateReplyTarget(replyTo, actor) : ''
+  const composeTargetOptions = useMemo(
+    () => lockedReplyTarget
+      ? [{ value: lockedReplyTarget, label: targetLabel(lockedReplyTarget) }]
+      : sendTargetOptions,
+    [lockedReplyTarget, sendTargetOptions]
+  )
 
   useEffect(() => {
+    if (lockedReplyTarget) return
     if (!sendTargetOptions.some(option => option.value === sendTo)) setSendTo('public')
-  }, [sendTargetOptions, sendTo])
+  }, [lockedReplyTarget, sendTargetOptions, sendTo])
+
+  useEffect(() => {
+    if (channelFilter !== 'all' && channelFilter !== 'public') setSendTo(channelFilter)
+  }, [channelFilter])
 
   useEffect(() => {
     if (!channelOptions.some(option => option.value === channelFilter)) setChannelFilter('all')
@@ -301,7 +318,7 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
                 <label className="group-chat-target">
                   <span>To</span>
                   <select value={sendTo} onChange={e => setSendTo(e.target.value)} disabled={Boolean(lockedReplyTarget)}>
-                    {sendTargetOptions.map(option => (
+                    {composeTargetOptions.map(option => (
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </select>
