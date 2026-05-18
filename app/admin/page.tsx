@@ -299,7 +299,7 @@ function AdminContent() {
                         <div className={clsx('rounded-lg border px-3 py-2', viewedWaveMeta.disaster ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50')}>
                           <div className="text-label">Disaster selection</div>
                           <div className={clsx('text-sm font-bold', viewedWaveMeta.disaster ? 'text-green-700' : 'text-red-700')}>
-                            {viewedWaveMeta.disaster ? `sent disaster D${viewedWaveMeta.disaster}` : 'no disaster'}
+                            {viewedWaveMeta.disaster ? `Sent disaster ${viewedWaveMeta.disaster}` : 'no disaster'}
                           </div>
                         </div>
                       </div>

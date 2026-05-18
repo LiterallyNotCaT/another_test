@@ -203,9 +203,12 @@ export async function fetchWaveInputs(wave: number): Promise<{ rows: WaveInputRo
   const parsed = Array.from(
     parsedRows.reduce((byBaan, row) => byBaan.set(row.baan, row), new Map<number, WaveInputRow>()).values()
   ).sort((a, b) => a.baan - b.baan)
-  const infoRows = await fetchWaveRangeGViz(wave, 'H20:H22')
-  let king: number | null = parseInt(infoRows?.[0]?.[0] ?? '')
-  let kingDisaster: number | null = parseInt(infoRows?.[2]?.[0] ?? '')
+  const [kingCell, disasterCell] = await Promise.all([
+    fetchWaveRangeGViz(wave, 'H20'),
+    fetchWaveRangeGViz(wave, 'H22'),
+  ])
+  let king: number | null = parseInt(String(kingCell?.[0]?.[0] ?? '').trim())
+  let kingDisaster: number | null = parseInt(String(disasterCell?.[0]?.[0] ?? '').trim())
   if (isNaN(king)) king = null
   if (isNaN(kingDisaster)) kingDisaster = null
   return { rows: parsed, king, kingDisaster }
