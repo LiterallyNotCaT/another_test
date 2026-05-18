@@ -217,21 +217,47 @@ export interface GroupChatMessage {
   timestamp: string
   sender: string
   baan: number | null
-  readCount: number
   message: string
 }
 
 export type GroupChatActor = number | 'admin'
 
+function isChatActorValue(value: string) {
+  const text = String(value || '').trim()
+  if (text.toLowerCase() === 'admin') return true
+  const baan = Number(text)
+  return Number.isInteger(baan) && baan >= 1 && baan <= 12
+}
+
+function splitChatTimestamp(value: string) {
+  const text = String(value || '').trim()
+  const timeMatch = text.match(/(\d{1,2}:\d{2}(?:\s*[AP]M)?)/i)
+  if (!timeMatch) return { dateText: text, timeText: '' }
+  return {
+    dateText: text.replace(timeMatch[1], '').trim(),
+    timeText: timeMatch[1].trim(),
+  }
+}
+
 export async function fetchGroupChatMessages(): Promise<GroupChatMessage[]> {
-  const rows = await fetchGidRangeGViz(CHAT_GID, 'A2:E')
+  const rows = await fetchGidRangeGViz(CHAT_GID, 'A2:D')
   const messages: GroupChatMessage[] = []
   for (let i = 0; i < rows.length; i++) {
-    const dateText = String(rows[i]?.[0] ?? '').trim()
-    const timeText = String(rows[i]?.[1] ?? '').trim()
-    const baanRaw = String(rows[i]?.[2] ?? '').trim()
-    const message = String(rows[i]?.[3] ?? '').trim()
-    const readCount = parseInt(String(rows[i]?.[4] ?? ''))
+    const colA = String(rows[i]?.[0] ?? '').trim()
+    const colB = String(rows[i]?.[1] ?? '').trim()
+    const colC = String(rows[i]?.[2] ?? '').trim()
+    const colD = String(rows[i]?.[3] ?? '').trim()
+    let dateText = colA
+    let timeText = colB
+    let baanRaw = colC
+    let message = colD
+    if (isChatActorValue(colB) && colC && (!isChatActorValue(colC) || !colD || /^\d+$/.test(colD))) {
+      const split = splitChatTimestamp(colA)
+      dateText = split.dateText
+      timeText = split.timeText
+      baanRaw = colB
+      message = colC
+    }
     if (!dateText && !timeText && !baanRaw && !message) break
     const baan = parseInt(baanRaw)
     const isAdmin = baanRaw.toLowerCase() === 'admin'
@@ -242,7 +268,6 @@ export async function fetchGroupChatMessages(): Promise<GroupChatMessage[]> {
       timestamp,
       sender: isAdmin ? 'Admin' : baanRaw,
       baan: !isNaN(baan) && baan >= 1 && baan <= 12 ? baan : null,
-      readCount: Number.isFinite(readCount) ? Math.max(0, Math.min(12, readCount)) : 0,
       message,
     })
   }
@@ -261,22 +286,6 @@ export async function sendGroupChatMessage(actor: GroupChatActor, message: strin
     return { ok: true, message: 'Sent' }
   } catch (e) {
     console.error('sendGroupChatMessage:', e)
-    return { ok: false, message: String(e) }
-  }
-}
-
-export async function markGroupChatRead(actor: GroupChatActor, rows: number[]): Promise<{ ok: boolean; message?: string }> {
-  if (!GAS_URL || !rows.length) return { ok: false, message: 'No rows to mark' }
-  try {
-    await fetch(GAS_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'markChatRead', actor, rows }),
-    })
-    return { ok: true }
-  } catch (e) {
-    console.error('markGroupChatRead:', e)
     return { ok: false, message: String(e) }
   }
 }

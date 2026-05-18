@@ -6,7 +6,6 @@ import { MessageCircle, Send, X } from 'lucide-react'
 import { HOUSE_COLORS, HOUSE_NAMES } from '@/lib/constants'
 import {
   fetchGroupChatMessages,
-  markGroupChatRead,
   sendGroupChatMessage,
   type GroupChatActor,
   type GroupChatMessage,
@@ -27,15 +26,23 @@ function parseChatDate(raw: string) {
 }
 
 function formatChatTime(raw: string) {
+  const amPmParts = raw.match(/(?:^|\s)(1[0-2]|0?\d):([0-5]\d)\s*([AP]M)(?:\s|$)/i)
+  if (amPmParts) {
+    const hour = Number(amPmParts[1])
+    const normalizedHour = amPmParts[3].toUpperCase() === 'PM'
+      ? hour === 12 ? 12 : hour + 12
+      : hour === 12 ? 0 : hour
+    return `${String(normalizedHour).padStart(2, '0')}:${amPmParts[2]}`
+  }
+
+  const timeParts = raw.match(/(?:^|\s)([01]?\d|2[0-3]):([0-5]\d)(?:\s|$)/)
+  if (timeParts) return `${timeParts[1].padStart(2, '0')}:${timeParts[2]}`
+
   const date = parseChatDate(raw)
   if (!Number.isNaN(date.getTime())) {
-    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+    return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })
   }
   return raw
-}
-
-function actorKey(actor: GroupChatActor) {
-  return String(actor)
 }
 
 function isSameActor(message: GroupChatMessage, actor: GroupChatActor) {
@@ -48,6 +55,13 @@ function actorLabel(actor: GroupChatActor) {
   return actor === 'admin' ? 'Admin' : HOUSE_NAMES[actor]
 }
 
+function optimisticTimestamp() {
+  const now = new Date()
+  const date = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()}`
+  const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+  return `${date} ${time}`
+}
+
 export default function GroupChat({ actor, label }: { actor: GroupChatActor; label?: string }) {
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState<GroupChatMessage[]>([])
@@ -58,8 +72,6 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
   const seenLatestRef = useRef('')
   const initializedRef = useRef(false)
   const listRef = useRef<HTMLDivElement | null>(null)
-  const openedAtRef = useRef(0)
-  const actorId = actorKey(actor)
 
   const refresh = useCallback(async () => {
     try {
@@ -91,10 +103,8 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
 
   useEffect(() => {
     if (!open) {
-      openedAtRef.current = 0
       return
     }
-    if (!openedAtRef.current) openedAtRef.current = Date.now()
     const latestId = messages.at(-1)?.id ?? ''
     seenLatestRef.current = latestId
     setUnread(false)
@@ -103,39 +113,24 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
     })
   }, [open, messages])
 
-  useEffect(() => {
-    if (!open || !messages.length || !openedAtRef.current) return
-    const storageKey = `biggame_chat_read_${actorId}`
-    let readRows: number[] = []
-    try { readRows = JSON.parse(localStorage.getItem(storageKey) || '[]') } catch {}
-    const readSet = new Set(readRows)
-    const rowsToMark = messages
-      .filter(message => {
-        if (isSameActor(message, actor) || readSet.has(message.row)) return false
-        const messageTime = parseChatDate(message.timestamp).getTime()
-        return Number.isFinite(messageTime) && messageTime <= openedAtRef.current
-      })
-      .map(message => message.row)
-    if (!rowsToMark.length) return
-
-    rowsToMark.forEach(row => readSet.add(row))
-    localStorage.setItem(storageKey, JSON.stringify(Array.from(readSet).slice(-400)))
-    setMessages(prev => prev.map(message => rowsToMark.includes(message.row)
-      ? { ...message, readCount: Math.min(13, message.readCount + 1) }
-      : message
-    ))
-    void markGroupChatRead(actor, rowsToMark)
-  }, [actor, actorId, messages, open])
-
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     const message = draft.trim()
     if (!message || sending) return
     setSending(true)
     setDraft('')
+    const now = Date.now()
+    setMessages(prev => [...prev, {
+      id: `local-${now}`,
+      row: -now,
+      timestamp: optimisticTimestamp(),
+      sender: actor === 'admin' ? 'Admin' : String(actor),
+      baan: actor === 'admin' ? null : actor,
+      message,
+    }])
     const result = await sendGroupChatMessage(actor, message)
     if (!result.ok) setError(result.message ?? 'Cannot send message')
-    await refresh()
+    window.setTimeout(refresh, 900)
     setSending(false)
   }
 
@@ -165,7 +160,7 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
                 const isMine = isSameActor(message, actor)
                 const isAdmin = message.sender.toLowerCase() === 'admin'
                 const color = isAdmin ? '#111827' : message.baan ? HOUSE_COLORS[message.baan] : '#64748b'
-                const senderName = isAdmin ? 'Admin' : message.baan ? HOUSE_NAMES[message.baan] : 'Unknown'
+                const senderName = isAdmin ? 'Admin' : message.baan ? HOUSE_NAMES[message.baan] : message.sender || 'Unknown'
                 return (
                   <div key={message.id} className={clsx('group-chat-message-row', isMine && 'is-mine')}>
                     <div className="group-chat-message-meta">
@@ -175,7 +170,6 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
                     <div className={clsx('group-chat-bubble', isMine && 'is-mine')} style={isMine ? { background: color } : undefined}>
                       {message.message}
                     </div>
-                    <div className="group-chat-read">อ่านแล้ว {message.readCount}</div>
                   </div>
                 )
               })}

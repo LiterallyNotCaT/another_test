@@ -49,9 +49,6 @@ function doPost(e) {
     } else if (payload.action === 'writeChat') {
       const result = handleWriteChat(payload)
       output.setContent(JSON.stringify(result))
-    } else if (payload.action === 'markChatRead') {
-      const result = handleMarkChatRead(payload)
-      output.setContent(JSON.stringify(result))
     } else if (payload.action === 'writeGameState') {
       const result = handleWriteGameState(payload.state || {})
       output.setContent(JSON.stringify(result))
@@ -76,66 +73,19 @@ function handleWriteChat(payload) {
   const sheet = getSheetByGid_(ss, CHAT_GID)
   if (!sheet) return { status: 'error', message: `Chat sheet gid ${CHAT_GID} not found` }
 
-  const lastRow = Math.max(sheet.getLastRow(), 1)
-  let targetRow = Math.max(lastRow + 1, 2)
-  if (lastRow >= 2) {
-    const values = sheet.getRange(2, 1, lastRow - 1, 5).getValues()
-    const emptyIndex = values.findIndex(row => row.every(cell => String(cell || '').trim() === ''))
-    if (emptyIndex >= 0) targetRow = 2 + emptyIndex
-  }
+  const targetRow = Math.max(sheet.getLastRow() + 1, 2)
 
   const now = new Date()
   const timeZone = Session.getScriptTimeZone()
   const dateText = Utilities.formatDate(now, timeZone, 'M/d/yyyy')
-  const timeText = Utilities.formatDate(now, timeZone, 'h:mm a')
-  sheet.getRange(targetRow, 1, 1, 5).setValues([[
+  const timeText = Utilities.formatDate(now, timeZone, 'HH:mm')
+  sheet.getRange(targetRow, 1, 1, 4).setValues([[
     dateText,
     timeText,
     actor,
     message.slice(0, 500),
-    0,
   ]])
-  sheet.getRange(targetRow, 5).setNote('')
-  SpreadsheetApp.flush()
   return { status: 'ok', row: targetRow }
-}
-
-function handleMarkChatRead(payload) {
-  const actor = normalizeChatActor_(payload.actor)
-  if (!actor) return { status: 'error', message: 'Invalid chat actor' }
-
-  const rows = Array.isArray(payload.rows)
-    ? payload.rows.map(Number).filter(row => row >= 2 && row <= 1000)
-    : []
-  if (!rows.length) return { status: 'ok', updated: 0 }
-
-  const ss = SpreadsheetApp.openById(SHEET_ID)
-  const sheet = getSheetByGid_(ss, CHAT_GID)
-  if (!sheet) return { status: 'error', message: `Chat sheet gid ${CHAT_GID} not found` }
-
-  const uniqueRows = [...new Set(rows)]
-  let updated = 0
-  const actorKey = String(actor).toLowerCase()
-  uniqueRows.forEach(row => {
-    const sender = normalizeChatActor_(sheet.getRange(row, 3).getValue())
-    if (String(sender).toLowerCase() === actorKey) return
-
-    const readCell = sheet.getRange(row, 5)
-    const readers = new Set(
-      String(readCell.getNote() || '')
-        .split(',')
-        .map(value => value.trim().toLowerCase())
-        .filter(Boolean)
-    )
-    if (readers.has(actorKey)) return
-
-    readers.add(actorKey)
-    readCell.setValue(Math.min(12, readers.size))
-    readCell.setNote(Array.from(readers).join(','))
-    updated += 1
-  })
-  SpreadsheetApp.flush()
-  return { status: 'ok', updated }
 }
 
 function normalizeChatActor_(actor) {

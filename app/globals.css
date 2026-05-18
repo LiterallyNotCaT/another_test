@@ -3259,12 +3259,6 @@ form .btn.w-full {
   border-radius: 14px 14px 4px 14px;
   color: #fff;
 }
-.group-chat-read {
-  padding: 0 4px;
-  font-size: 0.66rem;
-  font-weight: 800;
-  color: #64748b;
-}
 .group-chat-empty {
   margin: auto;
   color: #64748b;
