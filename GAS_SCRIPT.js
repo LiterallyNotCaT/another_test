@@ -72,31 +72,43 @@ function handleWriteChat(payload) {
   if (!message) return { status: 'error', message: 'Message is blank' }
   if (chatActorKey_(sendTo) === chatActorKey_(actor)) sendTo = 'public'
 
-  const ss = SpreadsheetApp.openById(SHEET_ID)
-  const sheet = getSheetByGid_(ss, CHAT_GID)
-  if (!sheet) return { status: 'error', message: `Chat sheet gid ${CHAT_GID} not found` }
+  const lock = LockService.getScriptLock()
+  let locked = false
+  try {
+    lock.waitLock(15000)
+    locked = true
 
-  const targetRow = Math.max(sheet.getLastRow() + 1, 2)
-  const lockedReplyTarget = getPrivateReplyTarget_(sheet, replyToId, actor)
-  if (lockedReplyTarget) sendTo = lockedReplyTarget
-  const previousRow = targetRow > 2 ? targetRow - 1 : 1
-  const previousId = Number(sheet.getRange(previousRow, 1).getValue())
-  const chatId = Number.isFinite(previousId) && previousId > 0 ? previousId + 1 : targetRow - 1
+    const ss = SpreadsheetApp.openById(SHEET_ID)
+    const sheet = getSheetByGid_(ss, CHAT_GID)
+    if (!sheet) return { status: 'error', message: `Chat sheet gid ${CHAT_GID} not found` }
 
-  const now = new Date()
-  const timeZone = Session.getScriptTimeZone()
-  const dateText = Utilities.formatDate(now, timeZone, 'M/d/yyyy')
-  const timeText = Utilities.formatDate(now, timeZone, 'HH:mm')
-  sheet.getRange(targetRow, 1, 1, 7).setValues([[
-    chatId,
-    dateText,
-    timeText,
-    actor,
-    message.slice(0, 500),
-    sendTo,
-    replyToId,
-  ]])
-  return { status: 'ok', row: targetRow, id: chatId }
+    const targetRow = Math.max(sheet.getLastRow() + 1, 2)
+    const lockedReplyTarget = getPrivateReplyTarget_(sheet, replyToId, actor)
+    if (lockedReplyTarget) sendTo = lockedReplyTarget
+    const previousRow = targetRow > 2 ? targetRow - 1 : 1
+    const previousId = Number(sheet.getRange(previousRow, 1).getValue())
+    const chatId = Number.isFinite(previousId) && previousId > 0 ? previousId + 1 : targetRow - 1
+
+    const now = new Date()
+    const timeZone = Session.getScriptTimeZone()
+    const dateText = Utilities.formatDate(now, timeZone, 'M/d/yyyy')
+    const timeText = Utilities.formatDate(now, timeZone, 'HH:mm')
+    sheet.getRange(targetRow, 1, 1, 7).setValues([[
+      chatId,
+      dateText,
+      timeText,
+      actor,
+      message.slice(0, 500),
+      sendTo,
+      replyToId,
+    ]])
+    SpreadsheetApp.flush()
+    return { status: 'ok', row: targetRow, id: chatId }
+  } catch (err) {
+    return { status: 'error', message: 'Chat is busy. Please retry.' }
+  } finally {
+    if (locked) lock.releaseLock()
+  }
 }
 
 function normalizeChatActor_(actor) {
