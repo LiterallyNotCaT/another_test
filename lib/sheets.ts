@@ -224,23 +224,25 @@ export interface GroupChatMessage {
 export type GroupChatActor = number | 'admin'
 
 export async function fetchGroupChatMessages(): Promise<GroupChatMessage[]> {
-  const rows = await fetchGidRangeGViz(CHAT_GID, 'A2:D')
+  const rows = await fetchGidRangeGViz(CHAT_GID, 'A2:E')
   const messages: GroupChatMessage[] = []
   for (let i = 0; i < rows.length; i++) {
-    const timestamp = String(rows[i]?.[0] ?? '').trim()
-    const baanRaw = String(rows[i]?.[1] ?? '').trim()
-    const message = String(rows[i]?.[2] ?? '').trim()
-    const readCount = parseInt(String(rows[i]?.[3] ?? ''))
-    if (!timestamp && !baanRaw && !message) break
+    const dateText = String(rows[i]?.[0] ?? '').trim()
+    const timeText = String(rows[i]?.[1] ?? '').trim()
+    const baanRaw = String(rows[i]?.[2] ?? '').trim()
+    const message = String(rows[i]?.[3] ?? '').trim()
+    const readCount = parseInt(String(rows[i]?.[4] ?? ''))
+    if (!dateText && !timeText && !baanRaw && !message) break
     const baan = parseInt(baanRaw)
     const isAdmin = baanRaw.toLowerCase() === 'admin'
+    const timestamp = [dateText, timeText].filter(Boolean).join(' ')
     messages.push({
-      id: `${i + 2}-${timestamp}-${baanRaw}-${message}`,
+      id: `${i + 2}-${dateText}-${timeText}-${baanRaw}-${message}`,
       row: i + 2,
       timestamp,
       sender: isAdmin ? 'Admin' : baanRaw,
       baan: !isNaN(baan) && baan >= 1 && baan <= 12 ? baan : null,
-      readCount: Number.isFinite(readCount) ? Math.max(0, Math.min(13, readCount)) : 0,
+      readCount: Number.isFinite(readCount) ? Math.max(0, Math.min(12, readCount)) : 0,
       message,
     })
   }

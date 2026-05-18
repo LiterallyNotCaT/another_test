@@ -79,18 +79,23 @@ function handleWriteChat(payload) {
   const lastRow = Math.max(sheet.getLastRow(), 1)
   let targetRow = Math.max(lastRow + 1, 2)
   if (lastRow >= 2) {
-    const values = sheet.getRange(2, 1, lastRow - 1, 3).getValues()
+    const values = sheet.getRange(2, 1, lastRow - 1, 5).getValues()
     const emptyIndex = values.findIndex(row => row.every(cell => String(cell || '').trim() === ''))
     if (emptyIndex >= 0) targetRow = 2 + emptyIndex
   }
 
-  const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'M/d/yyyy h:mm a')
-  sheet.getRange(targetRow, 1, 1, 4).setValues([[
-    timestamp,
+  const now = new Date()
+  const timeZone = Session.getScriptTimeZone()
+  const dateText = Utilities.formatDate(now, timeZone, 'M/d/yyyy')
+  const timeText = Utilities.formatDate(now, timeZone, 'h:mm a')
+  sheet.getRange(targetRow, 1, 1, 5).setValues([[
+    dateText,
+    timeText,
     actor,
     message.slice(0, 500),
-    1,
+    0,
   ]])
+  sheet.getRange(targetRow, 5).setNote('')
   SpreadsheetApp.flush()
   return { status: 'ok', row: targetRow }
 }
@@ -109,12 +114,28 @@ function handleMarkChatRead(payload) {
   if (!sheet) return { status: 'error', message: `Chat sheet gid ${CHAT_GID} not found` }
 
   const uniqueRows = [...new Set(rows)]
+  let updated = 0
+  const actorKey = String(actor).toLowerCase()
   uniqueRows.forEach(row => {
-    const current = Number(sheet.getRange(row, 4).getValue()) || 0
-    sheet.getRange(row, 4).setValue(Math.min(13, current + 1))
+    const sender = normalizeChatActor_(sheet.getRange(row, 3).getValue())
+    if (String(sender).toLowerCase() === actorKey) return
+
+    const readCell = sheet.getRange(row, 5)
+    const readers = new Set(
+      String(readCell.getNote() || '')
+        .split(',')
+        .map(value => value.trim().toLowerCase())
+        .filter(Boolean)
+    )
+    if (readers.has(actorKey)) return
+
+    readers.add(actorKey)
+    readCell.setValue(Math.min(12, readers.size))
+    readCell.setNote(Array.from(readers).join(','))
+    updated += 1
   })
   SpreadsheetApp.flush()
-  return { status: 'ok', updated: uniqueRows.length }
+  return { status: 'ok', updated }
 }
 
 function normalizeChatActor_(actor) {
