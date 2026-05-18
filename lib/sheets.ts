@@ -228,8 +228,12 @@ export interface GroupChatMessage {
 
 export type GroupChatActor = number | 'admin'
 
+function cleanChatCell(value: unknown) {
+  return String(value || '').replace(/\u00a0/g, ' ').trim()
+}
+
 function parseChatBaan(value: string) {
-  const text = String(value || '').trim()
+  const text = cleanChatCell(value)
   const match = text.match(/(?:baan|บ้าน)?\s*(\d{1,2})/i)
   const baan = Number(match?.[1] ?? text)
   return Number.isInteger(baan) && baan >= 1 && baan <= 12
@@ -238,13 +242,13 @@ function parseChatBaan(value: string) {
 }
 
 function isChatActorValue(value: string) {
-  const text = String(value || '').trim()
+  const text = cleanChatCell(value)
   if (text.toLowerCase() === 'admin') return true
   return parseChatBaan(text) != null
 }
 
 function splitChatTimestamp(value: string) {
-  const text = String(value || '').trim()
+  const text = cleanChatCell(value)
   const timeMatch = text.match(/(\d{1,2}:\d{2}(?:\s*[AP]M)?)/i)
   if (!timeMatch) return { dateText: text, timeText: '' }
   return {
@@ -254,7 +258,7 @@ function splitChatTimestamp(value: string) {
 }
 
 function normalizeChatTarget(value: string) {
-  const text = String(value || '').trim()
+  const text = cleanChatCell(value)
   const lower = text.toLowerCase()
   if (!text || lower === 'public' || lower === 'all') return 'public'
   if (lower === 'admin') return 'admin'
@@ -263,15 +267,27 @@ function normalizeChatTarget(value: string) {
 }
 
 function normalizeChatSender(value: string) {
-  const text = String(value || '').trim()
+  const text = cleanChatCell(value)
   if (text.toLowerCase() === 'admin') return { sender: 'Admin', baan: null }
   const baan = parseChatBaan(text)
   if (baan != null) return { sender: String(baan), baan }
   return { sender: text, baan: null }
 }
 
+function parseSlashDate(text: string) {
+  const match = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/)
+  if (!match) return null
+  const first = Number(match[1])
+  const second = Number(match[2])
+  const year = Number(match[3].length === 2 ? `20${match[3]}` : match[3])
+  const month = first > 12 ? second : first
+  const day = first > 12 ? first : second
+  const date = new Date(year, month - 1, day)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
 function parseSheetDate(value: string) {
-  const text = String(value || '').trim()
+  const text = cleanChatCell(value)
   const dateParts = text.match(/^Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?\)$/)
   if (dateParts) {
     return new Date(
@@ -283,6 +299,8 @@ function parseSheetDate(value: string) {
       Number(dateParts[6] ?? 0),
     )
   }
+  const slashDate = parseSlashDate(text)
+  if (slashDate) return slashDate
   return new Date(text)
 }
 
@@ -302,7 +320,7 @@ function chatDateParts(dateText: string) {
 }
 
 function normalizeChatTime(value: string) {
-  const text = String(value || '').trim()
+  const text = cleanChatCell(value)
   const amPmParts = text.match(/^(1[0-2]|0?\d):([0-5]\d)\s*([AP]M)$/i)
   if (amPmParts) {
     const hour = Number(amPmParts[1])
@@ -320,13 +338,13 @@ export async function fetchGroupChatMessages(): Promise<GroupChatMessage[]> {
   const rows = await fetchGidRangeGViz(CHAT_GID, 'A2:G')
   const messages: GroupChatMessage[] = []
   for (let i = 0; i < rows.length; i++) {
-    const colA = String(rows[i]?.[0] ?? '').trim()
-    const colB = String(rows[i]?.[1] ?? '').trim()
-    const colC = String(rows[i]?.[2] ?? '').trim()
-    const colD = String(rows[i]?.[3] ?? '').trim()
-    const colE = String(rows[i]?.[4] ?? '').trim()
-    const colF = String(rows[i]?.[5] ?? '').trim()
-    const colG = String(rows[i]?.[6] ?? '').trim()
+    const colA = cleanChatCell(rows[i]?.[0] ?? '')
+    const colB = cleanChatCell(rows[i]?.[1] ?? '')
+    const colC = cleanChatCell(rows[i]?.[2] ?? '')
+    const colD = cleanChatCell(rows[i]?.[3] ?? '')
+    const colE = cleanChatCell(rows[i]?.[4] ?? '')
+    const colF = cleanChatCell(rows[i]?.[5] ?? '')
+    const colG = cleanChatCell(rows[i]?.[6] ?? '')
     let chatId = ''
     let dateText = ''
     let timeText = ''
@@ -335,7 +353,7 @@ export async function fetchGroupChatMessages(): Promise<GroupChatMessage[]> {
     let sendTo = 'public'
     let replyToId = ''
 
-    if (/^\d+$/.test(colA) && (isChatActorValue(colD) || colE)) {
+    if (/^\d+$/.test(colA) && (colB || colC || colD || colE)) {
       chatId = colA
       dateText = colB
       timeText = colC

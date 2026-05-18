@@ -3236,11 +3236,26 @@ form .btn.w-full {
 .group-chat-list {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+  scrollbar-color: #93a7c5 rgba(226, 232, 240, 0.9);
+  scrollbar-width: thin;
   padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+.group-chat-list::-webkit-scrollbar {
+  width: 10px;
+}
+.group-chat-list::-webkit-scrollbar-track {
+  background: rgba(226, 232, 240, 0.9);
+  border-radius: 999px;
+}
+.group-chat-list::-webkit-scrollbar-thumb {
+  border: 2px solid rgba(226, 232, 240, 0.9);
+  border-radius: 999px;
+  background: #93a7c5;
 }
 .group-chat-message-row {
   display: flex;
@@ -3301,6 +3316,14 @@ form .btn.w-full {
 .group-chat-message-row.is-mine .group-chat-bubble-line {
   justify-content: flex-end;
 }
+.group-chat-message-actions {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 2px;
+  line-height: 1;
+}
 .group-chat-bubble {
   min-width: 0;
   border: 1px solid #d8e5f4;
@@ -3319,24 +3342,17 @@ form .btn.w-full {
   color: #fff;
 }
 .group-chat-time {
-  flex: 0 0 auto;
-  padding-bottom: 2px;
   color: #64748b;
   font-size: 0.66rem;
   font-weight: 900;
-  line-height: 1;
 }
 .group-chat-reply-btn {
-  align-self: flex-start;
-  padding: 0 4px;
+  padding: 0;
   color: #64748b;
   font-size: 0.68rem;
   font-weight: 900;
   text-decoration: underline;
   text-underline-offset: 2px;
-}
-.group-chat-message-row.is-mine .group-chat-reply-btn {
-  align-self: flex-end;
 }
 .group-chat-empty {
   margin: auto;
@@ -3381,6 +3397,11 @@ form .btn.w-full {
   color: #172033;
   font-weight: 800;
   outline: none;
+}
+.group-chat-target select:disabled {
+  cursor: not-allowed;
+  background: #e2e8f0;
+  color: #475569;
 }
 .group-chat-replying {
   min-width: 0;

@@ -39,6 +39,16 @@ function canViewMessage(message: GroupChatMessage, actor: GroupChatActor) {
   return target === currentActor || senderTarget(message) === currentActor
 }
 
+function privateReplyTarget(message: GroupChatMessage, actor: GroupChatActor) {
+  const currentActor = actorTarget(actor)
+  const sender = senderTarget(message)
+  const originalTarget = message.sendTo || 'public'
+  if (originalTarget === 'public') return ''
+  if (sender && sender !== currentActor) return sender
+  if (originalTarget !== currentActor) return originalTarget
+  return sender || originalTarget
+}
+
 function actorLabel(actor: GroupChatActor) {
   return actor === 'admin' ? 'Admin' : HOUSE_NAMES[actor]
 }
@@ -81,6 +91,7 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
     () => new Map(messages.map(message => [message.chatId, message])),
     [messages]
   )
+  const lockedReplyTarget = replyTo ? privateReplyTarget(replyTo, actor) : ''
 
   const refresh = useCallback(async () => {
     try {
@@ -125,7 +136,10 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
 
   const beginReply = (message: GroupChatMessage) => {
     setReplyTo(message)
-    if (!isSameActor(message, actor)) {
+    const lockedTarget = privateReplyTarget(message, actor)
+    if (lockedTarget) {
+      setSendTo(lockedTarget)
+    } else if (!isSameActor(message, actor)) {
       const target = senderTarget(message)
       if (target) setSendTo(target)
     }
@@ -139,6 +153,7 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
     setDraft('')
     const now = Date.now()
     const time = optimisticChatTime()
+    const effectiveSendTo = lockedReplyTarget || sendTo
     setMessages(prev => [...prev, {
       id: `local-${now}`,
       row: -now,
@@ -150,10 +165,10 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
       baan: actor === 'admin' ? null : actor,
       message,
       chatId: `local-${now}`,
-      sendTo,
+      sendTo: effectiveSendTo,
       replyToId: replyTo?.chatId ?? '',
     }])
-    const result = await sendGroupChatMessage(actor, message, { sendTo, replyToId: replyTo?.chatId ?? '' })
+    const result = await sendGroupChatMessage(actor, message, { sendTo: effectiveSendTo, replyToId: replyTo?.chatId ?? '' })
     if (!result.ok) setError(result.message ?? 'Cannot send message')
     setReplyTo(null)
     window.setTimeout(refresh, 900)
@@ -190,9 +205,10 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
                 const replySource = message.replyToId ? messageByChatId.get(message.replyToId) : null
                 const dateKey = message.dateKey || 'unknown-date'
                 const prevDateKey = index > 0 ? visibleMessages[index - 1].dateKey || 'unknown-date' : ''
+                const showDateDivider = dateKey !== 'unknown-date' && dateKey !== prevDateKey
                 return (
                   <Fragment key={message.id}>
-                    {dateKey !== prevDateKey && (
+                    {showDateDivider && (
                       <div className="group-chat-date-divider">{message.dateLabel || 'Unknown date'}</div>
                     )}
                     <div className={clsx('group-chat-message-row', isMine && 'is-mine')}>
@@ -214,11 +230,13 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
                         <div className={clsx('group-chat-bubble', isMine && 'is-mine')} style={isMine ? { background: color } : undefined}>
                           {message.message}
                         </div>
-                        <span className="group-chat-time">{message.timeLabel}</span>
+                        <span className="group-chat-message-actions">
+                          <span className="group-chat-time">{message.timeLabel}</span>
+                          <button type="button" className="group-chat-reply-btn" onClick={() => beginReply(message)}>
+                            reply
+                          </button>
+                        </span>
                       </div>
-                      <button type="button" className="group-chat-reply-btn" onClick={() => beginReply(message)}>
-                        reply
-                      </button>
                     </div>
                   </Fragment>
                 )
@@ -233,7 +251,7 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
               <div className="group-chat-compose-tools">
                 <label className="group-chat-target">
                   <span>To</span>
-                  <select value={sendTo} onChange={e => setSendTo(e.target.value)}>
+                  <select value={sendTo} onChange={e => setSendTo(e.target.value)} disabled={Boolean(lockedReplyTarget)}>
                     <option value="public">Public</option>
                     <option value="admin">Admin</option>
                     {Array.from({ length: 12 }, (_, index) => index + 1).map(baan => (
