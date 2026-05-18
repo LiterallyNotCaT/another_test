@@ -66,16 +66,19 @@ function handleWriteChat(payload) {
   const rawActor = payload.actor !== undefined ? payload.actor : payload.baan
   const actor = normalizeChatActor_(rawActor)
   const message = String(payload.message || '').trim()
-  const sendTo = normalizeChatRecipient_(payload.sendTo)
   const replyToId = normalizeChatReplyId_(payload.replyToId)
+  let sendTo = normalizeChatRecipient_(payload.sendTo)
   if (!actor) return { status: 'error', message: 'Invalid chat actor' }
   if (!message) return { status: 'error', message: 'Message is blank' }
+  if (chatActorKey_(sendTo) === chatActorKey_(actor)) sendTo = 'public'
 
   const ss = SpreadsheetApp.openById(SHEET_ID)
   const sheet = getSheetByGid_(ss, CHAT_GID)
   if (!sheet) return { status: 'error', message: `Chat sheet gid ${CHAT_GID} not found` }
 
   const targetRow = Math.max(sheet.getLastRow() + 1, 2)
+  const lockedReplyTarget = getPrivateReplyTarget_(sheet, replyToId, actor)
+  if (lockedReplyTarget) sendTo = lockedReplyTarget
   const previousRow = targetRow > 2 ? targetRow - 1 : 1
   const previousId = Number(sheet.getRange(previousRow, 1).getValue())
   const chatId = Number.isFinite(previousId) && previousId > 0 ? previousId + 1 : targetRow - 1
@@ -117,6 +120,33 @@ function normalizeChatRecipient_(recipient) {
 function normalizeChatReplyId_(replyToId) {
   const id = Number(replyToId)
   return Number.isFinite(id) && id > 0 ? id : ''
+}
+
+function chatActorKey_(actor) {
+  const normalized = normalizeChatActor_(actor) || normalizeChatRecipient_(actor)
+  return String(normalized || '').toLowerCase()
+}
+
+function getPrivateReplyTarget_(sheet, replyToId, actor) {
+  if (!replyToId) return ''
+  const lastRow = sheet.getLastRow()
+  if (lastRow < 2) return ''
+
+  const rows = sheet.getRange(2, 1, lastRow - 1, 6).getValues()
+  const replyRow = rows.find(row => String(row[0]).trim() === String(replyToId))
+  if (!replyRow) return ''
+
+  const originalSender = normalizeChatActor_(replyRow[3])
+  const originalTarget = normalizeChatRecipient_(replyRow[5])
+  if (!originalSender || !originalTarget || originalTarget === 'public') return ''
+
+  const actorKey = chatActorKey_(actor)
+  const senderKey = chatActorKey_(originalSender)
+  const targetKey = chatActorKey_(originalTarget)
+
+  if (senderKey && senderKey !== actorKey) return originalSender
+  if (targetKey && targetKey !== actorKey) return originalTarget
+  return ''
 }
 
 // Allow GET for health check

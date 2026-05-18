@@ -26,10 +26,11 @@ function senderTarget(message: GroupChatMessage) {
 }
 
 function targetLabel(target: string) {
-  if (target === 'public') return 'Public'
+  if (target === 'all') return 'All'
+  if (target === 'public') return 'Group chat'
   if (target === 'admin') return 'Admin'
   const baan = Number(target)
-  return Number.isInteger(baan) && baan >= 1 && baan <= 12 ? HOUSE_NAMES[baan] : 'Public'
+  return Number.isInteger(baan) && baan >= 1 && baan <= 12 ? HOUSE_NAMES[baan] : 'Group chat'
 }
 
 function canViewMessage(message: GroupChatMessage, actor: GroupChatActor) {
@@ -39,6 +40,32 @@ function canViewMessage(message: GroupChatMessage, actor: GroupChatActor) {
   return target === currentActor || senderTarget(message) === currentActor
 }
 
+function chatTargetOptions(actor: GroupChatActor, includeAll = false) {
+  const self = actorTarget(actor)
+  return [
+    ...(includeAll ? [{ value: 'all', label: 'All' }] : []),
+    { value: 'public', label: 'Group chat' },
+    ...(self === 'admin' ? [] : [{ value: 'admin', label: 'Admin' }]),
+    ...Array.from({ length: 12 }, (_, index) => index + 1)
+      .filter(baan => String(baan) !== self)
+      .map(baan => ({ value: String(baan), label: HOUSE_NAMES[baan] })),
+  ]
+}
+
+function messageChannelForActor(message: GroupChatMessage, actor: GroupChatActor) {
+  const target = message.sendTo || 'public'
+  if (target === 'public') return 'public'
+  const currentActor = actorTarget(actor)
+  const sender = senderTarget(message)
+  if (sender === currentActor) return target
+  if (target === currentActor) return sender
+  return target
+}
+
+function canSendToTarget(target: string, actor: GroupChatActor) {
+  return target === 'public' || target !== actorTarget(actor)
+}
+
 function privateReplyTarget(message: GroupChatMessage, actor: GroupChatActor) {
   const currentActor = actorTarget(actor)
   const sender = senderTarget(message)
@@ -46,7 +73,7 @@ function privateReplyTarget(message: GroupChatMessage, actor: GroupChatActor) {
   if (originalTarget === 'public') return ''
   if (sender && sender !== currentActor) return sender
   if (originalTarget !== currentActor) return originalTarget
-  return sender || originalTarget
+  return ''
 }
 
 function actorLabel(actor: GroupChatActor) {
@@ -76,6 +103,7 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
   const [messages, setMessages] = useState<GroupChatMessage[]>([])
   const [draft, setDraft] = useState('')
   const [sendTo, setSendTo] = useState('public')
+  const [channelFilter, setChannelFilter] = useState('all')
   const [replyTo, setReplyTo] = useState<GroupChatMessage | null>(null)
   const [sending, setSending] = useState(false)
   const [unread, setUnread] = useState(false)
@@ -83,21 +111,35 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
   const seenLatestRef = useRef('')
   const initializedRef = useRef(false)
   const listRef = useRef<HTMLDivElement | null>(null)
-  const visibleMessages = useMemo(
+  const sendTargetOptions = useMemo(() => chatTargetOptions(actor), [actor])
+  const channelOptions = useMemo(() => chatTargetOptions(actor, true), [actor])
+  const viewableMessages = useMemo(
     () => messages.filter(message => canViewMessage(message, actor)),
     [actor, messages]
   )
+  const visibleMessages = useMemo(
+    () => viewableMessages.filter(message => channelFilter === 'all' || messageChannelForActor(message, actor) === channelFilter),
+    [actor, channelFilter, viewableMessages]
+  )
   const messageByChatId = useMemo(
-    () => new Map(messages.map(message => [message.chatId, message])),
-    [messages]
+    () => new Map(viewableMessages.map(message => [message.chatId, message])),
+    [viewableMessages]
   )
   const lockedReplyTarget = replyTo ? privateReplyTarget(replyTo, actor) : ''
+
+  useEffect(() => {
+    if (!sendTargetOptions.some(option => option.value === sendTo)) setSendTo('public')
+  }, [sendTargetOptions, sendTo])
+
+  useEffect(() => {
+    if (!channelOptions.some(option => option.value === channelFilter)) setChannelFilter('all')
+  }, [channelFilter, channelOptions])
 
   const refresh = useCallback(async () => {
     try {
       const next = await fetchGroupChatMessages()
-      const visibleNext = next.filter(message => canViewMessage(message, actor))
-      const latestId = visibleNext.at(-1)?.id ?? ''
+      const viewableNext = next.filter(message => canViewMessage(message, actor))
+      const latestId = viewableNext.at(-1)?.id ?? ''
       setMessages(next)
       setError('')
       if (!initializedRef.current) {
@@ -126,13 +168,10 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
     if (!open) {
       return
     }
-    const latestId = visibleMessages.at(-1)?.id ?? ''
+    const latestId = viewableMessages.at(-1)?.id ?? ''
     seenLatestRef.current = latestId
     setUnread(false)
-    requestAnimationFrame(() => {
-      listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' })
-    })
-  }, [open, visibleMessages])
+  }, [open, viewableMessages])
 
   const beginReply = (message: GroupChatMessage) => {
     setReplyTo(message)
@@ -153,7 +192,7 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
     setDraft('')
     const now = Date.now()
     const time = optimisticChatTime()
-    const effectiveSendTo = lockedReplyTarget || sendTo
+    const effectiveSendTo = canSendToTarget(lockedReplyTarget || sendTo, actor) ? lockedReplyTarget || sendTo : 'public'
     setMessages(prev => [...prev, {
       id: `local-${now}`,
       row: -now,
@@ -195,6 +234,16 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
                 <X size={18} />
               </button>
             </div>
+            <div className="group-chat-channel-filter">
+              <label className="group-chat-target">
+                <span>Channel</span>
+                <select value={channelFilter} onChange={e => setChannelFilter(e.target.value)}>
+                  {channelOptions.map(option => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
 
             <div ref={listRef} className="group-chat-list">
               {visibleMessages.map((message, index) => {
@@ -219,7 +268,7 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
                       {message.replyToId && (
                         <div className="group-chat-reply-context">
                           <div className="group-chat-reply-author">
-                            Replying to {replySource ? messageSenderName(replySource) : `message #${message.replyToId}`}
+                            Replying to {replySource ? messageSenderName(replySource) : 'private message'}
                           </div>
                           {replySource && (
                             <div className="group-chat-reply-text">{replySource.message}</div>
@@ -252,10 +301,8 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
                 <label className="group-chat-target">
                   <span>To</span>
                   <select value={sendTo} onChange={e => setSendTo(e.target.value)} disabled={Boolean(lockedReplyTarget)}>
-                    <option value="public">Public</option>
-                    <option value="admin">Admin</option>
-                    {Array.from({ length: 12 }, (_, index) => index + 1).map(baan => (
-                      <option key={baan} value={String(baan)}>{HOUSE_NAMES[baan]}</option>
+                    {sendTargetOptions.map(option => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </select>
                 </label>

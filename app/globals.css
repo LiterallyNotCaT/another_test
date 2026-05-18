@@ -3233,6 +3233,13 @@ form .btn.w-full {
   border-radius: 999px;
   background: rgba(255,255,255,0.16);
 }
+.group-chat-channel-filter {
+  display: flex;
+  justify-content: flex-end;
+  border-bottom: 1px solid #d8e5f4;
+  background: rgba(255,255,255,0.78);
+  padding: 8px 12px;
+}
 .group-chat-list {
   flex: 1;
   min-height: 0;
@@ -3314,6 +3321,7 @@ form .btn.w-full {
   gap: 6px;
 }
 .group-chat-message-row.is-mine .group-chat-bubble-line {
+  flex-direction: row-reverse;
   justify-content: flex-end;
 }
 .group-chat-message-actions {
@@ -3323,6 +3331,9 @@ form .btn.w-full {
   gap: 6px;
   padding-bottom: 2px;
   line-height: 1;
+}
+.group-chat-message-row.is-mine .group-chat-message-actions {
+  flex-direction: row-reverse;
 }
 .group-chat-bubble {
   min-width: 0;
