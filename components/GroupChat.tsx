@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import { MessageCircle, Send, X } from 'lucide-react'
 import { HOUSE_COLORS, HOUSE_NAMES } from '@/lib/constants'
@@ -11,72 +11,82 @@ import {
   type GroupChatMessage,
 } from '@/lib/sheets'
 
-function parseChatDate(raw: string) {
-  const dateParts = raw.match(/^Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?\)$/)
-  return dateParts
-    ? new Date(
-      Number(dateParts[1]),
-      Number(dateParts[2]),
-      Number(dateParts[3]),
-      Number(dateParts[4] ?? 0),
-      Number(dateParts[5] ?? 0),
-      Number(dateParts[6] ?? 0),
-    )
-    : new Date(raw)
-}
-
-function formatChatTime(raw: string) {
-  const amPmParts = raw.match(/(?:^|\s)(1[0-2]|0?\d):([0-5]\d)\s*([AP]M)(?:\s|$)/i)
-  if (amPmParts) {
-    const hour = Number(amPmParts[1])
-    const normalizedHour = amPmParts[3].toUpperCase() === 'PM'
-      ? hour === 12 ? 12 : hour + 12
-      : hour === 12 ? 0 : hour
-    return `${String(normalizedHour).padStart(2, '0')}:${amPmParts[2]}`
-  }
-
-  const timeParts = raw.match(/(?:^|\s)([01]?\d|2[0-3]):([0-5]\d)(?:\s|$)/)
-  if (timeParts) return `${timeParts[1].padStart(2, '0')}:${timeParts[2]}`
-
-  const date = parseChatDate(raw)
-  if (!Number.isNaN(date.getTime())) {
-    return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })
-  }
-  return raw
-}
-
 function isSameActor(message: GroupChatMessage, actor: GroupChatActor) {
   return actor === 'admin'
     ? message.sender.toLowerCase() === 'admin'
     : message.baan === actor
 }
 
+function actorTarget(actor: GroupChatActor) {
+  return actor === 'admin' ? 'admin' : String(actor)
+}
+
+function senderTarget(message: GroupChatMessage) {
+  return message.sender.toLowerCase() === 'admin' ? 'admin' : message.baan ? String(message.baan) : ''
+}
+
+function targetLabel(target: string) {
+  if (target === 'public') return 'Public'
+  if (target === 'admin') return 'Admin'
+  const baan = Number(target)
+  return Number.isInteger(baan) && baan >= 1 && baan <= 12 ? HOUSE_NAMES[baan] : 'Public'
+}
+
+function canViewMessage(message: GroupChatMessage, actor: GroupChatActor) {
+  const target = message.sendTo || 'public'
+  if (target === 'public') return true
+  const currentActor = actorTarget(actor)
+  return target === currentActor || senderTarget(message) === currentActor
+}
+
 function actorLabel(actor: GroupChatActor) {
   return actor === 'admin' ? 'Admin' : HOUSE_NAMES[actor]
 }
 
-function optimisticTimestamp() {
+function messageSenderName(message: GroupChatMessage) {
+  if (message.sender.toLowerCase() === 'admin') return 'Admin'
+  if (message.baan) return HOUSE_NAMES[message.baan]
+  return message.sender || 'Unknown'
+}
+
+function optimisticChatTime() {
   const now = new Date()
   const date = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()}`
   const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-  return `${date} ${time}`
+  return {
+    timestamp: `${date} ${time}`,
+    dateKey: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
+    dateLabel: now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    timeLabel: time,
+  }
 }
 
 export default function GroupChat({ actor, label }: { actor: GroupChatActor; label?: string }) {
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState<GroupChatMessage[]>([])
   const [draft, setDraft] = useState('')
+  const [sendTo, setSendTo] = useState('public')
+  const [replyTo, setReplyTo] = useState<GroupChatMessage | null>(null)
   const [sending, setSending] = useState(false)
   const [unread, setUnread] = useState(false)
   const [error, setError] = useState('')
   const seenLatestRef = useRef('')
   const initializedRef = useRef(false)
   const listRef = useRef<HTMLDivElement | null>(null)
+  const visibleMessages = useMemo(
+    () => messages.filter(message => canViewMessage(message, actor)),
+    [actor, messages]
+  )
+  const messageByChatId = useMemo(
+    () => new Map(messages.map(message => [message.chatId, message])),
+    [messages]
+  )
 
   const refresh = useCallback(async () => {
     try {
       const next = await fetchGroupChatMessages()
-      const latestId = next.at(-1)?.id ?? ''
+      const visibleNext = next.filter(message => canViewMessage(message, actor))
+      const latestId = visibleNext.at(-1)?.id ?? ''
       setMessages(next)
       setError('')
       if (!initializedRef.current) {
@@ -93,7 +103,7 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
       console.error(e)
       setError('Cannot load chat')
     }
-  }, [open])
+  }, [actor, open])
 
   useEffect(() => {
     refresh()
@@ -105,13 +115,21 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
     if (!open) {
       return
     }
-    const latestId = messages.at(-1)?.id ?? ''
+    const latestId = visibleMessages.at(-1)?.id ?? ''
     seenLatestRef.current = latestId
     setUnread(false)
     requestAnimationFrame(() => {
       listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' })
     })
-  }, [open, messages])
+  }, [open, visibleMessages])
+
+  const beginReply = (message: GroupChatMessage) => {
+    setReplyTo(message)
+    if (!isSameActor(message, actor)) {
+      const target = senderTarget(message)
+      if (target) setSendTo(target)
+    }
+  }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -120,16 +138,24 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
     setSending(true)
     setDraft('')
     const now = Date.now()
+    const time = optimisticChatTime()
     setMessages(prev => [...prev, {
       id: `local-${now}`,
       row: -now,
-      timestamp: optimisticTimestamp(),
+      timestamp: time.timestamp,
+      dateKey: time.dateKey,
+      dateLabel: time.dateLabel,
+      timeLabel: time.timeLabel,
       sender: actor === 'admin' ? 'Admin' : String(actor),
       baan: actor === 'admin' ? null : actor,
       message,
+      chatId: `local-${now}`,
+      sendTo,
+      replyToId: replyTo?.chatId ?? '',
     }])
-    const result = await sendGroupChatMessage(actor, message)
+    const result = await sendGroupChatMessage(actor, message, { sendTo, replyToId: replyTo?.chatId ?? '' })
     if (!result.ok) setError(result.message ?? 'Cannot send message')
+    setReplyTo(null)
     window.setTimeout(refresh, 900)
     setSending(false)
   }
@@ -156,40 +182,86 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
             </div>
 
             <div ref={listRef} className="group-chat-list">
-              {messages.map(message => {
+              {visibleMessages.map((message, index) => {
                 const isMine = isSameActor(message, actor)
                 const isAdmin = message.sender.toLowerCase() === 'admin'
                 const color = isAdmin ? '#111827' : message.baan ? HOUSE_COLORS[message.baan] : '#64748b'
-                const senderName = isAdmin ? 'Admin' : message.baan ? HOUSE_NAMES[message.baan] : message.sender || 'Unknown'
+                const senderName = messageSenderName(message)
+                const replySource = message.replyToId ? messageByChatId.get(message.replyToId) : null
+                const dateKey = message.dateKey || 'unknown-date'
+                const prevDateKey = index > 0 ? visibleMessages[index - 1].dateKey || 'unknown-date' : ''
                 return (
-                  <div key={message.id} className={clsx('group-chat-message-row', isMine && 'is-mine')}>
-                    <div className="group-chat-message-meta">
-                      <span style={{ color }}>{senderName}</span>
-                      <span>{formatChatTime(message.timestamp)}</span>
+                  <Fragment key={message.id}>
+                    {dateKey !== prevDateKey && (
+                      <div className="group-chat-date-divider">{message.dateLabel || 'Unknown date'}</div>
+                    )}
+                    <div className={clsx('group-chat-message-row', isMine && 'is-mine')}>
+                      <div className="group-chat-message-meta">
+                        <span style={{ color }}>{senderName}</span>
+                        <span>sent to {targetLabel(message.sendTo)}</span>
+                      </div>
+                      {message.replyToId && (
+                        <div className="group-chat-reply-context">
+                          <div className="group-chat-reply-author">
+                            Replying to {replySource ? messageSenderName(replySource) : `message #${message.replyToId}`}
+                          </div>
+                          {replySource && (
+                            <div className="group-chat-reply-text">{replySource.message}</div>
+                          )}
+                        </div>
+                      )}
+                      <div className="group-chat-bubble-line">
+                        <div className={clsx('group-chat-bubble', isMine && 'is-mine')} style={isMine ? { background: color } : undefined}>
+                          {message.message}
+                        </div>
+                        <span className="group-chat-time">{message.timeLabel}</span>
+                      </div>
+                      <button type="button" className="group-chat-reply-btn" onClick={() => beginReply(message)}>
+                        reply
+                      </button>
                     </div>
-                    <div className={clsx('group-chat-bubble', isMine && 'is-mine')} style={isMine ? { background: color } : undefined}>
-                      {message.message}
-                    </div>
-                  </div>
+                  </Fragment>
                 )
               })}
-              {!messages.length && (
+              {!visibleMessages.length && (
                 <div className="group-chat-empty">No messages yet.</div>
               )}
             </div>
 
             {error && <div className="group-chat-error">{error}</div>}
             <form onSubmit={submit} className="group-chat-form">
-              <input
-                value={draft}
-                onChange={e => setDraft(e.target.value)}
-                maxLength={500}
-                placeholder="Type a message"
-                className="group-chat-input"
-              />
-              <button type="submit" disabled={!draft.trim() || sending} className="group-chat-send" aria-label="Send message">
-                <Send size={18} />
-              </button>
+              <div className="group-chat-compose-tools">
+                <label className="group-chat-target">
+                  <span>To</span>
+                  <select value={sendTo} onChange={e => setSendTo(e.target.value)}>
+                    <option value="public">Public</option>
+                    <option value="admin">Admin</option>
+                    {Array.from({ length: 12 }, (_, index) => index + 1).map(baan => (
+                      <option key={baan} value={String(baan)}>{HOUSE_NAMES[baan]}</option>
+                    ))}
+                  </select>
+                </label>
+                {replyTo && (
+                  <div className="group-chat-replying">
+                    <span>
+                      Replying to {messageSenderName(replyTo)}: {replyTo.message}
+                    </span>
+                    <button type="button" onClick={() => setReplyTo(null)} aria-label="Cancel reply">x</button>
+                  </div>
+                )}
+              </div>
+              <div className="group-chat-input-row">
+                <input
+                  value={draft}
+                  onChange={e => setDraft(e.target.value)}
+                  maxLength={500}
+                  placeholder="Type a message"
+                  className="group-chat-input"
+                />
+                <button type="submit" disabled={!draft.trim() || sending} className="group-chat-send" aria-label="Send message">
+                  <Send size={18} />
+                </button>
+              </div>
             </form>
           </div>
         </div>

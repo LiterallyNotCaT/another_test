@@ -213,20 +213,34 @@ export async function fetchWaveInputs(wave: number): Promise<{ rows: WaveInputRo
 
 export interface GroupChatMessage {
   id: string
+  chatId: string
   row: number
   timestamp: string
+  dateKey: string
+  dateLabel: string
+  timeLabel: string
   sender: string
   baan: number | null
   message: string
+  sendTo: string
+  replyToId: string
 }
 
 export type GroupChatActor = number | 'admin'
 
+function parseChatBaan(value: string) {
+  const text = String(value || '').trim()
+  const match = text.match(/(?:baan|บ้าน)?\s*(\d{1,2})/i)
+  const baan = Number(match?.[1] ?? text)
+  return Number.isInteger(baan) && baan >= 1 && baan <= 12
+    ? baan
+    : null
+}
+
 function isChatActorValue(value: string) {
   const text = String(value || '').trim()
   if (text.toLowerCase() === 'admin') return true
-  const baan = Number(text)
-  return Number.isInteger(baan) && baan >= 1 && baan <= 12
+  return parseChatBaan(text) != null
 }
 
 function splitChatTimestamp(value: string) {
@@ -239,49 +253,158 @@ function splitChatTimestamp(value: string) {
   }
 }
 
+function normalizeChatTarget(value: string) {
+  const text = String(value || '').trim()
+  const lower = text.toLowerCase()
+  if (!text || lower === 'public' || lower === 'all') return 'public'
+  if (lower === 'admin') return 'admin'
+  const baan = parseChatBaan(text)
+  return baan != null ? String(baan) : 'public'
+}
+
+function normalizeChatSender(value: string) {
+  const text = String(value || '').trim()
+  if (text.toLowerCase() === 'admin') return { sender: 'Admin', baan: null }
+  const baan = parseChatBaan(text)
+  if (baan != null) return { sender: String(baan), baan }
+  return { sender: text, baan: null }
+}
+
+function parseSheetDate(value: string) {
+  const text = String(value || '').trim()
+  const dateParts = text.match(/^Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?\)$/)
+  if (dateParts) {
+    return new Date(
+      Number(dateParts[1]),
+      Number(dateParts[2]),
+      Number(dateParts[3]),
+      Number(dateParts[4] ?? 0),
+      Number(dateParts[5] ?? 0),
+      Number(dateParts[6] ?? 0),
+    )
+  }
+  return new Date(text)
+}
+
+function chatDateParts(dateText: string) {
+  const date = parseSheetDate(dateText)
+  if (!Number.isNaN(date.getTime())) {
+    return {
+      dateKey: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
+      dateLabel: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    }
+  }
+  const fallback = String(dateText || '').trim()
+  return {
+    dateKey: fallback || 'unknown-date',
+    dateLabel: fallback || 'Unknown date',
+  }
+}
+
+function normalizeChatTime(value: string) {
+  const text = String(value || '').trim()
+  const amPmParts = text.match(/^(1[0-2]|0?\d):([0-5]\d)\s*([AP]M)$/i)
+  if (amPmParts) {
+    const hour = Number(amPmParts[1])
+    const normalizedHour = amPmParts[3].toUpperCase() === 'PM'
+      ? hour === 12 ? 12 : hour + 12
+      : hour === 12 ? 0 : hour
+    return `${String(normalizedHour).padStart(2, '0')}:${amPmParts[2]}`
+  }
+  const timeParts = text.match(/^([01]?\d|2[0-3]):([0-5]\d)$/)
+  if (timeParts) return `${timeParts[1].padStart(2, '0')}:${timeParts[2]}`
+  return text
+}
+
 export async function fetchGroupChatMessages(): Promise<GroupChatMessage[]> {
-  const rows = await fetchGidRangeGViz(CHAT_GID, 'A2:D')
+  const rows = await fetchGidRangeGViz(CHAT_GID, 'A2:G')
   const messages: GroupChatMessage[] = []
   for (let i = 0; i < rows.length; i++) {
     const colA = String(rows[i]?.[0] ?? '').trim()
     const colB = String(rows[i]?.[1] ?? '').trim()
     const colC = String(rows[i]?.[2] ?? '').trim()
     const colD = String(rows[i]?.[3] ?? '').trim()
-    let dateText = colA
-    let timeText = colB
-    let baanRaw = colC
-    let message = colD
-    if (isChatActorValue(colB) && colC && (!isChatActorValue(colC) || !colD || /^\d+$/.test(colD))) {
+    const colE = String(rows[i]?.[4] ?? '').trim()
+    const colF = String(rows[i]?.[5] ?? '').trim()
+    const colG = String(rows[i]?.[6] ?? '').trim()
+    let chatId = ''
+    let dateText = ''
+    let timeText = ''
+    let baanRaw = ''
+    let message = ''
+    let sendTo = 'public'
+    let replyToId = ''
+
+    if (/^\d+$/.test(colA) && (isChatActorValue(colD) || colE)) {
+      chatId = colA
+      dateText = colB
+      timeText = colC
+      baanRaw = colD
+      message = colE
+      sendTo = normalizeChatTarget(colF)
+      replyToId = /^\d+$/.test(colG) ? colG : ''
+    } else if (isChatActorValue(colC)) {
+      chatId = String(i + 1)
+      dateText = colA
+      timeText = colB
+      baanRaw = colC
+      message = colD
+    } else if (isChatActorValue(colB) && colC && (!isChatActorValue(colC) || !colD || /^\d+$/.test(colD))) {
       const split = splitChatTimestamp(colA)
+      chatId = String(i + 1)
       dateText = split.dateText
       timeText = split.timeText
       baanRaw = colB
       message = colC
+    } else {
+      chatId = String(i + 1)
+      dateText = colA
+      timeText = colB
+      baanRaw = colC
+      message = colD
     }
     if (!dateText && !timeText && !baanRaw && !message) break
-    const baan = parseInt(baanRaw)
-    const isAdmin = baanRaw.toLowerCase() === 'admin'
+    const { sender, baan } = normalizeChatSender(baanRaw)
+    const { dateKey, dateLabel } = chatDateParts(dateText)
+    const timeLabel = normalizeChatTime(timeText)
     const timestamp = [dateText, timeText].filter(Boolean).join(' ')
     messages.push({
-      id: `${i + 2}-${dateText}-${timeText}-${baanRaw}-${message}`,
+      id: chatId ? `chat-${chatId}` : `${i + 2}-${dateText}-${timeText}-${baanRaw}-${message}`,
+      chatId,
       row: i + 2,
       timestamp,
-      sender: isAdmin ? 'Admin' : baanRaw,
-      baan: !isNaN(baan) && baan >= 1 && baan <= 12 ? baan : null,
+      dateKey,
+      dateLabel,
+      timeLabel,
+      sender,
+      baan,
       message,
+      sendTo,
+      replyToId,
     })
   }
   return messages
 }
 
-export async function sendGroupChatMessage(actor: GroupChatActor, message: string): Promise<{ ok: boolean; message?: string }> {
+export async function sendGroupChatMessage(
+  actor: GroupChatActor,
+  message: string,
+  options: { sendTo?: string; replyToId?: string } = {}
+): Promise<{ ok: boolean; message?: string }> {
   if (!GAS_URL) return { ok: false, message: 'GAS URL not configured' }
   try {
     await fetch(GAS_URL, {
       method: 'POST',
       mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'writeChat', actor, baan: actor, message }),
+      body: JSON.stringify({
+        action: 'writeChat',
+        actor,
+        baan: actor,
+        message,
+        sendTo: options.sendTo ?? 'public',
+        replyToId: options.replyToId ?? '',
+      }),
     })
     return { ok: true, message: 'Sent' }
   } catch (e) {

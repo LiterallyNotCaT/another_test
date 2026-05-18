@@ -66,6 +66,8 @@ function handleWriteChat(payload) {
   const rawActor = payload.actor !== undefined ? payload.actor : payload.baan
   const actor = normalizeChatActor_(rawActor)
   const message = String(payload.message || '').trim()
+  const sendTo = normalizeChatRecipient_(payload.sendTo)
+  const replyToId = normalizeChatReplyId_(payload.replyToId)
   if (!actor) return { status: 'error', message: 'Invalid chat actor' }
   if (!message) return { status: 'error', message: 'Message is blank' }
 
@@ -74,18 +76,24 @@ function handleWriteChat(payload) {
   if (!sheet) return { status: 'error', message: `Chat sheet gid ${CHAT_GID} not found` }
 
   const targetRow = Math.max(sheet.getLastRow() + 1, 2)
+  const previousRow = targetRow > 2 ? targetRow - 1 : 1
+  const previousId = Number(sheet.getRange(previousRow, 1).getValue())
+  const chatId = Number.isFinite(previousId) && previousId > 0 ? previousId + 1 : targetRow - 1
 
   const now = new Date()
   const timeZone = Session.getScriptTimeZone()
   const dateText = Utilities.formatDate(now, timeZone, 'M/d/yyyy')
   const timeText = Utilities.formatDate(now, timeZone, 'HH:mm')
-  sheet.getRange(targetRow, 1, 1, 4).setValues([[
+  sheet.getRange(targetRow, 1, 1, 7).setValues([[
+    chatId,
     dateText,
     timeText,
     actor,
     message.slice(0, 500),
+    sendTo,
+    replyToId,
   ]])
-  return { status: 'ok', row: targetRow }
+  return { status: 'ok', row: targetRow, id: chatId }
 }
 
 function normalizeChatActor_(actor) {
@@ -94,6 +102,21 @@ function normalizeChatActor_(actor) {
   const baan = Number(raw)
   if (baan >= 1 && baan <= 12) return baan
   return ''
+}
+
+function normalizeChatRecipient_(recipient) {
+  const raw = String(recipient || '').trim()
+  const lower = raw.toLowerCase()
+  if (!raw || lower === 'public' || lower === 'all') return 'public'
+  if (lower === 'admin') return 'admin'
+  const baan = Number(raw)
+  if (baan >= 1 && baan <= 12) return baan
+  return 'public'
+}
+
+function normalizeChatReplyId_(replyToId) {
+  const id = Number(replyToId)
+  return Number.isFinite(id) && id > 0 ? id : ''
 }
 
 // Allow GET for health check

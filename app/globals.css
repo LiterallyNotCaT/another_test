@@ -3101,6 +3101,22 @@ form .btn.w-full {
   border-collapse: separate;
   border-spacing: 0;
 }
+.lie-history {
+  overflow: hidden;
+}
+.lie-history-table-wrap {
+  width: 100%;
+  overflow: hidden;
+}
+.lie-history-table {
+  table-layout: fixed;
+}
+.lie-history-house-col {
+  width: clamp(56px, 7.2%, 78px);
+}
+.lie-history-sub-col {
+  width: calc((100% - clamp(56px, 7.2%, 78px)) / 8);
+}
 .lie-cell {
   display: grid;
   gap: 8px;
@@ -3116,16 +3132,16 @@ form .btn.w-full {
 .lie-token-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 3px;
 }
 .lie-token {
   display: inline-flex;
   align-items: center;
-  min-height: 22px;
-  border-radius: 7px;
-  padding: 2px 7px;
+  min-height: 20px;
+  border-radius: 6px;
+  padding: 1px 5px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 0.78rem;
+  font-size: clamp(0.62rem, 0.78vw, 0.76rem);
   font-weight: 900;
 }
 .lie-token-honest {
@@ -3141,6 +3157,8 @@ form .btn.w-full {
 .lie-actual-text {
   color: #334155;
   font-weight: 700;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
 }
 
 .shared-scoreboard-hidden-score {
@@ -3235,15 +3253,56 @@ form .btn.w-full {
   align-self: flex-end;
   align-items: flex-end;
 }
+.group-chat-date-divider {
+  align-self: center;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.22);
+  padding: 5px 10px;
+  color: #475569;
+  font-size: 0.7rem;
+  font-weight: 900;
+}
 .group-chat-message-meta {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 0 4px;
   font-size: 0.68rem;
   font-weight: 800;
   color: #64748b;
 }
+.group-chat-reply-context {
+  max-width: 100%;
+  border-left: 3px solid #93c5fd;
+  border-radius: 8px;
+  background: rgba(219, 234, 254, 0.72);
+  padding: 5px 8px;
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 800;
+  overflow: hidden;
+}
+.group-chat-reply-author {
+  color: #2563eb;
+  font-weight: 900;
+}
+.group-chat-reply-text {
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.group-chat-bubble-line {
+  max-width: 100%;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+.group-chat-message-row.is-mine .group-chat-bubble-line {
+  justify-content: flex-end;
+}
 .group-chat-bubble {
+  min-width: 0;
   border: 1px solid #d8e5f4;
   border-radius: 14px 14px 14px 4px;
   background: #fff;
@@ -3259,6 +3318,26 @@ form .btn.w-full {
   border-radius: 14px 14px 4px 14px;
   color: #fff;
 }
+.group-chat-time {
+  flex: 0 0 auto;
+  padding-bottom: 2px;
+  color: #64748b;
+  font-size: 0.66rem;
+  font-weight: 900;
+  line-height: 1;
+}
+.group-chat-reply-btn {
+  align-self: flex-start;
+  padding: 0 4px;
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.group-chat-message-row.is-mine .group-chat-reply-btn {
+  align-self: flex-end;
+}
 .group-chat-empty {
   margin: auto;
   color: #64748b;
@@ -3272,12 +3351,68 @@ form .btn.w-full {
   font-weight: 800;
 }
 .group-chat-form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 44px;
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
   padding: 12px;
   border-top: 1px solid #d8e5f4;
   background: rgba(255,255,255,0.82);
+}
+.group-chat-compose-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.group-chat-target {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+.group-chat-target select {
+  min-width: 126px;
+  border: 1px solid #cbd8ea;
+  border-radius: 999px;
+  background: #fff;
+  padding: 6px 26px 6px 10px;
+  color: #172033;
+  font-weight: 800;
+  outline: none;
+}
+.group-chat-replying {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #eff6ff;
+  padding: 5px 8px 5px 10px;
+  color: #1d4ed8;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+.group-chat-replying span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.group-chat-replying button {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  line-height: 1;
+}
+.group-chat-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  gap: 8px;
 }
 .group-chat-input {
   min-width: 0;
