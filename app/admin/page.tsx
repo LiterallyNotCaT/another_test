@@ -395,7 +395,7 @@ function AdminContent() {
 
                 {tab==='history' && (
                   <div className="wire-panel bg-white p-4 admin-history-panel">
-                    <FinanceHistory showResults enableBetReturnRanking />
+                    <FinanceHistory showResults enableBetReturnRanking maxSelectableWave={TOTAL_WAVES} />
                   </div>
                 )}
 

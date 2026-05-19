@@ -40,6 +40,7 @@ interface FinanceHistoryProps {
   showFilters?: boolean
   showResults?: boolean
   enableBetReturnRanking?: boolean
+  maxSelectableWave?: number
   highlightedRevealWave?: number | null
   isRevealHighlightLeaving?: boolean
   className?: string
@@ -125,6 +126,7 @@ function FinanceHistory({
   showFilters = true,
   showResults: showResultsOverride,
   enableBetReturnRanking = false,
+  maxSelectableWave,
   highlightedRevealWave = null,
   isRevealHighlightLeaving = false,
   className,
@@ -144,6 +146,7 @@ function FinanceHistory({
   const [rankingLoading, setRankingLoading] = useState(false)
   const [rankingError, setRankingError] = useState('')
   const showResults = showResultsOverride ?? stateShowResults
+  const selectableWaveLimit = Math.max(1, Math.min(TOTAL_WAVES, maxSelectableWave ?? currentWave))
 
   useEffect(() => setSelectedBaan(initialBaan), [initialBaan])
   useEffect(() => setSelectedWave(initialWave), [initialWave])
@@ -157,14 +160,14 @@ function FinanceHistory({
     return unsub
   }, [])
   useEffect(() => {
-    if (selectedWave !== 'all' && selectedWave > currentWave) setSelectedWave(currentWave)
-  }, [currentWave, selectedWave])
+    if (selectedWave !== 'all' && selectedWave > selectableWaveLimit) setSelectedWave(selectableWaveLimit)
+  }, [selectableWaveLimit, selectedWave])
 
   const wavesToRead = useMemo(
     () => selectedWave === 'all'
-      ? Array.from({ length: currentWave }, (_, i) => i + 1)
-      : [Math.min(selectedWave, currentWave)],
-    [currentWave, selectedWave],
+      ? Array.from({ length: selectableWaveLimit }, (_, i) => i + 1)
+      : [Math.min(selectedWave, selectableWaveLimit)],
+    [selectableWaveLimit, selectedWave],
   )
 
   const refresh = useCallback(async () => {
@@ -503,7 +506,7 @@ function FinanceHistory({
           <button onClick={() => setSelectedWave('all')} className={clsx('btn', selectedWave === 'all' ? 'btn-primary' : 'btn-ghost')}>
             All
           </button>
-          {Array.from({ length: Math.min(TOTAL_WAVES, currentWave) }, (_, i) => i + 1).map(w => (
+          {Array.from({ length: selectableWaveLimit }, (_, i) => i + 1).map(w => (
             <button key={w} onClick={() => setSelectedWave(w)}
               className={clsx('btn', selectedWave === w ? 'btn-primary' : 'btn-ghost')}>
               W{w}
