@@ -2926,7 +2926,88 @@ form .btn.w-full {
   padding: clamp(8px, 1.3vw, 14px);
   overflow: visible !important;
 }
-.ambassador-tabs { margin-bottom: clamp(8px, 1vw, 12px); }
+.ambassador-tab-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: clamp(10px, 1.4vw, 18px);
+  margin-bottom: clamp(8px, 1vw, 12px);
+}
+.ambassador-tabs { min-width: 0; }
+.king-pro-unlock {
+  position: relative;
+  flex: 0 1 410px;
+  display: grid;
+  grid-template-columns: minmax(118px, auto) minmax(150px, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.86);
+  padding: 7px;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.07);
+}
+.king-pro-unlock.is-unlocked {
+  flex: 0 0 auto;
+  display: inline-flex;
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+.king-pro-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #334155;
+  font-size: 0.72rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+.king-pro-input {
+  min-width: 0;
+  height: 34px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background: #fff;
+  padding: 0 10px;
+  color: #0f172a;
+  font-size: 0.8rem;
+  font-weight: 700;
+  outline: none;
+}
+.king-pro-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+.king-pro-button {
+  height: 34px;
+  border-radius: 9px;
+  background: #2563eb;
+  padding: 0 12px;
+  color: #fff;
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+.king-pro-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.king-pro-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #047857;
+  font-size: 0.82rem;
+  font-weight: 1000;
+  letter-spacing: 0.08em;
+}
+.king-pro-error {
+  position: absolute;
+  right: 8px;
+  top: calc(100% + 3px);
+  color: #dc2626;
+  font-size: 0.68rem;
+  font-weight: 900;
+}
 .ambassador-tab-view {
   flex: 1;
   min-height: 0;
@@ -3680,6 +3761,18 @@ form .btn.w-full {
   .shared-scoreboard-clock { width: 100%; justify-content: space-between; }
   .admin-control-title { padding-right: 88px; font-size: 0.88rem; }
   .admin-wave-label { font-size: 1.05rem; }
+  .ambassador-tab-toolbar {
+    flex-direction: column;
+  }
+  .king-pro-unlock {
+    width: 100%;
+    flex-basis: auto;
+    grid-template-columns: 1fr;
+  }
+  .king-pro-label,
+  .king-pro-button {
+    width: 100%;
+  }
 }
 
 .fullscreen-scope {

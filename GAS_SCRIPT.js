@@ -203,25 +203,65 @@ function handleWriteGameState(state) {
 }
 
 // ── Write one house's wave data ────────────────────────────
+function isProvided_(value) {
+  return value !== undefined && value !== null && value !== ''
+}
+
+function numberFrom_(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+  const cleaned = String(value || '').replace(/,/g, '').trim()
+  if (!cleaned) return 0
+  const n = Number(cleaned)
+  return Number.isFinite(n) ? n : 0
+}
+
+function cellNumber_(range) {
+  const raw = numberFrom_(range.getValue())
+  if (raw !== 0) return raw
+  return numberFrom_(range.getDisplayValue())
+}
+
 function handleWriteWave(payload) {
   const { wave, baan, betTarget, betAmount, kingAmount, kingDisaster, islands } = payload
+  const waveNumber = numberFrom_(wave)
+  const baanNumber = numberFrom_(baan)
+  const hasBetPayload = isProvided_(betTarget) || isProvided_(betAmount)
+  const betTargetNumber = isProvided_(betTarget) ? numberFrom_(betTarget) : null
+  const betAmountNumber = isProvided_(betAmount) ? numberFrom_(betAmount) : null
+  const kingAmountNumber = isProvided_(kingAmount) ? numberFrom_(kingAmount) : null
+  const hasKingDisasterPayload = kingDisaster !== undefined
+  const kingDisasterNumber = isProvided_(kingDisaster) ? numberFrom_(kingDisaster) : null
+  const normalizedIslands = Array.isArray(islands)
+    ? islands
+      .map(isl => ({ name: String(isl.name || '').trim().toUpperCase(), amount: numberFrom_(isl.amount) }))
+      .filter(isl => isl.name)
+    : []
 
   // Validate
-  if (!wave || wave < 1 || wave > 5)  return { status: 'error', message: 'Invalid wave' }
-  if (!baan || baan < 1 || baan > 12) return { status: 'error', message: 'Invalid baan' }
-  if (kingDisaster !== undefined && kingDisaster !== null && (kingDisaster < 1 || kingDisaster > 9)) {
+  if (!waveNumber || waveNumber < 1 || waveNumber > 5)  return { status: 'error', message: 'Invalid wave' }
+  if (!baanNumber || baanNumber < 1 || baanNumber > 12) return { status: 'error', message: 'Invalid baan' }
+  if (hasBetPayload && (!betTargetNumber || betTargetNumber < 1 || betTargetNumber > 12 || !betAmountNumber)) {
+    return { status: 'error', message: 'Invalid bet payload' }
+  }
+  if (kingDisasterNumber !== null && (kingDisasterNumber < 1 || kingDisasterNumber > 9)) {
     return { status: 'error', message: 'Invalid king disaster' }
   }
-  if (kingAmount !== undefined && kingAmount !== null && kingAmount < 100) {
+  if (kingAmountNumber !== null && kingAmountNumber < 100) {
     return { status: 'error', message: 'King bid minimum is 100' }
   }
-  if (Array.isArray(islands) && islands.length > 0 && islands.some(isl => (isl.amount || 0) < 100)) {
+  if (normalizedIslands.length > 0 && normalizedIslands.some(isl => isl.amount < 100)) {
     return { status: 'error', message: 'Island bid minimum is 100' }
   }
 
+  const lock = LockService.getScriptLock()
+  let locked = false
+  try {
+    lock.waitLock(20000)
+    locked = true
+
   const ss        = SpreadsheetApp.openById(SHEET_ID)
-  const sheetName = `Wave ${wave}`
-  const sheet     = getWaveSheet_(ss, wave)
+  const sheetName = `Wave ${waveNumber}`
+  const sheet     = getWaveSheet_(ss, waveNumber)
   if (!sheet) {
     return {
       status: 'error',
@@ -230,30 +270,29 @@ function handleWriteWave(payload) {
   }
 
   // Row for this baan (บ้าน 1 = row 5, บ้าน 2 = row 6, ...)
-  const row = DATA_START_ROW + baan - 1
+  const row = DATA_START_ROW + baanNumber - 1
 
   // ── Read current balance to validate ──────────────────
-  const currentBalance = Number(sheet.getRange(row, COL.BALANCE).getValue()) || 0
+  const currentBalance = cellNumber_(sheet.getRange(row, COL.BALANCE))
   const minBetAmount = Math.ceil(currentBalance * 0.1)
-  const hasIslandPayload = Array.isArray(islands) && islands.length > 0
-  const islandSpend = hasIslandPayload ? islands.reduce((sum, isl) => sum + (isl.amount || 0), 0) : 0
-  const hasBetPayload = betTarget !== undefined || betAmount !== undefined
-  const hasDisasterOnlyPayload = kingDisaster !== undefined && !hasBetPayload && !hasIslandPayload && (kingAmount === undefined || kingAmount === null)
-  const existingBetSpend = sheet.getRange(row, COL.BET_AMOUNT).getValue() || 0
-  const existingKingSpend = sheet.getRange(row, COL.KING_AMOUNT).getValue() || 0
+  const hasIslandPayload = normalizedIslands.length > 0
+  const islandSpend = hasIslandPayload ? normalizedIslands.reduce((sum, isl) => sum + isl.amount, 0) : 0
+  const hasDisasterOnlyPayload = hasKingDisasterPayload && !hasBetPayload && !hasIslandPayload && kingAmountNumber === null
+  const existingBetSpend = cellNumber_(sheet.getRange(row, COL.BET_AMOUNT))
+  const existingKingSpend = cellNumber_(sheet.getRange(row, COL.KING_AMOUNT))
   const existingIslandSpend =
-    (sheet.getRange(row, COL.ISLAND1_AMT).getValue() || 0) +
-    (sheet.getRange(row, COL.ISLAND2_AMT).getValue() || 0) +
-    (sheet.getRange(row, COL.ISLAND3_AMT).getValue() || 0)
-  const nextBetSpend = hasBetPayload ? (betAmount || 0) : existingBetSpend
-  const nextKingSpend = kingAmount !== undefined && kingAmount !== null ? kingAmount : existingKingSpend
+    cellNumber_(sheet.getRange(row, COL.ISLAND1_AMT)) +
+    cellNumber_(sheet.getRange(row, COL.ISLAND2_AMT)) +
+    cellNumber_(sheet.getRange(row, COL.ISLAND3_AMT))
+  const nextBetSpend = hasBetPayload ? (betAmountNumber || 0) : existingBetSpend
+  const nextKingSpend = kingAmountNumber !== null ? kingAmountNumber : existingKingSpend
   const nextIslandSpend = hasIslandPayload ? islandSpend : existingIslandSpend
-  const totalSpend = (hasBetPayload ? (betAmount || 0) : 0) +
-    (kingAmount !== undefined && kingAmount !== null ? kingAmount : 0) +
+  const totalSpend = (hasBetPayload ? (betAmountNumber || 0) : 0) +
+    (kingAmountNumber !== null ? kingAmountNumber : 0) +
     (hasIslandPayload ? islandSpend : 0)
   const totalSpendAfterSave = nextBetSpend + nextKingSpend + nextIslandSpend
 
-  if (betAmount !== undefined && betAmount !== null && betAmount < minBetAmount) {
+  if (betAmountNumber !== null && betAmountNumber < minBetAmount) {
     return { status: 'error', message: `Bet minimum is ${minBetAmount}` }
   }
   if (totalSpend <= 0 && !hasDisasterOnlyPayload) {
@@ -270,24 +309,24 @@ function handleWriteWave(payload) {
   }
 
   // ── Write Bet game ─────────────────────────────────────
-  if (betTarget !== undefined && betTarget !== null) {
-    sheet.getRange(row, COL.BET_TARGET).setValue(betTarget)
+  if (betTargetNumber !== null) {
+    sheet.getRange(row, COL.BET_TARGET).setValue(betTargetNumber)
   }
-  if (betAmount !== undefined && betAmount !== null) {
-    sheet.getRange(row, COL.BET_AMOUNT).setValue(betAmount)
+  if (betAmountNumber !== null) {
+    sheet.getRange(row, COL.BET_AMOUNT).setValue(betAmountNumber)
   }
 
   // ── Write King bid ─────────────────────────────────────
-  if (kingAmount !== undefined && kingAmount !== null) {
-    sheet.getRange(row, COL.KING_AMOUNT).setValue(kingAmount)
+  if (kingAmountNumber !== null) {
+    sheet.getRange(row, COL.KING_AMOUNT).setValue(kingAmountNumber)
   }
 
   // Write this wave's king disaster to INFO cell H22.
   // H22 is shared per wave, so only the king client should send this field.
-  if (kingDisaster !== undefined) {
+  if (hasKingDisasterPayload) {
     const disasterCell = sheet.getRange(22, 8)
     if (kingDisaster === null || kingDisaster === '') disasterCell.clearContent()
-    else disasterCell.setValue(kingDisaster)
+    else disasterCell.setValue(kingDisasterNumber)
   }
 
   // ── Write Islands (up to 3) ────────────────────────────
@@ -297,7 +336,7 @@ function handleWriteWave(payload) {
     { name: COL.ISLAND3_NAME, amt: COL.ISLAND3_AMT },
   ]
 
-  const islandList = hasIslandPayload ? islands.slice(0, 3) : []
+  const islandList = hasIslandPayload ? normalizedIslands.slice(0, 3) : []
   if (hasIslandPayload) {
     // Clear existing island data first
     for (const c of islandCols) {
@@ -320,14 +359,25 @@ function handleWriteWave(payload) {
     message: `บ้าน ${baan} Wave ${wave} บันทึกแล้ว`,
     written: {
       row,
-      betTarget,
-      betAmount,
-      kingAmount,
-      kingDisaster,
+      betTarget: betTargetNumber,
+      betAmount: betAmountNumber,
+      kingAmount: kingAmountNumber,
+      kingDisaster: kingDisasterNumber,
       islands: islandList,
       totalSpend,
       remainingBalance: currentBalance - totalSpendAfterSave,
     }
+  }
+  } catch (err) {
+    const message = String(err && err.message ? err.message : err)
+    return {
+      status: 'error',
+      message: /lock|timeout|timed out/i.test(message)
+        ? 'Wave sheet is busy. Please retry.'
+        : `Wave sheet write failed: ${message}`,
+    }
+  } finally {
+    if (locked) lock.releaseLock()
   }
 }
 

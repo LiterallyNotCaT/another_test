@@ -10,11 +10,12 @@ import OwnershipHistory, { useWaveOwnership } from '@/components/OwnershipHistor
 import SharedScoreboard from '@/components/SharedScoreboard'
 import Timer from '@/components/Timer'
 import clsx from 'clsx'
-import { Map, History, Trophy, MessageSquareWarning } from 'lucide-react'
+import { CheckCircle2, KeyRound, Map, History, Trophy, MessageSquareWarning } from 'lucide-react'
 import { TOTAL_WAVES, normalizeAmbassadorVisibility, type AmbassadorTabKey } from '@/lib/constants'
 import { AFTERNOON_SCORE_CSV_URL } from '@/lib/scoreboardSources'
 import { getGameState, subscribeStore, getActiveDisasterForWave, setActiveDisaster, startCloudSync } from '@/lib/store'
 import { fetchWaveInfo } from '@/lib/sheets'
+import { getKingProPassword, passwordSessionToken } from '@/lib/passwords'
 
 const DISASTER_IDS = Array.from({ length: 9 }, (_, i) => i + 1)
 const TAB_META: Array<{ key: AmbassadorTabKey; label: string; icon: ReactNode }> = [
@@ -24,6 +25,8 @@ const TAB_META: Array<{ key: AmbassadorTabKey; label: string; icon: ReactNode }>
   { key: 'ownership', label: 'Ownership', icon: <Map size={14}/> },
   { key: 'lieHistory', label: 'Lie History', icon: <MessageSquareWarning size={14}/> },
 ]
+const KING_PRO_SCOPE = 'ambassador:king-pro'
+const KING_PRO_SESSION_KEY = 'ambassador_king_pro'
 
 function AmbassadorContent() {
   const [tab,         setTab]         = useState<AmbassadorTabKey>('map')
@@ -32,9 +35,20 @@ function AmbassadorContent() {
   const [currentKing, setCurrentKing]  = useState<number|null>(null)
   const [gs,          setGS]          = useState(getGameState)
   const [isLoaded]                    = useState(true)
+  const [kingProInput, setKingProInput] = useState('')
+  const [kingProUnlocked, setKingProUnlocked] = useState(false)
+  const [kingProChecking, setKingProChecking] = useState(false)
+  const [kingProError, setKingProError] = useState('')
   const sheetOwnership = useWaveOwnership(selWave)
   const ambassadorVisibility = normalizeAmbassadorVisibility(gs.ambassadorVisibility)
-  const visibleTabs = TAB_META.filter(item => ambassadorVisibility.tabs[item.key])
+  const effectiveVisibility = kingProUnlocked
+    ? {
+      tabs: Object.fromEntries(TAB_META.map(item => [item.key, true])) as Record<AmbassadorTabKey, boolean>,
+      scoreboardNumbers: true,
+    }
+    : ambassadorVisibility
+  const visibleTabs = TAB_META.filter(item => effectiveVisibility.tabs[item.key])
+  const canSeeFullInfo = kingProUnlocked || gs.showResults === true
 
   useEffect(()=>{
     if (!isLoaded) return
@@ -43,6 +57,20 @@ function AmbassadorContent() {
   }, [isLoaded])
 
   useEffect(() => startCloudSync(800), [])
+
+  useEffect(() => {
+    let cancelled = false
+    getKingProPassword()
+      .then(async password => {
+        if (cancelled || !password) return
+        const token = await passwordSessionToken(KING_PRO_SCOPE, password)
+        if (!cancelled && sessionStorage.getItem(KING_PRO_SESSION_KEY) === token) {
+          setKingProUnlocked(true)
+        }
+      })
+      .catch(console.error)
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -57,9 +85,32 @@ function AmbassadorContent() {
   }, [selWave])
 
   useEffect(() => {
-    if (ambassadorVisibility.tabs[tab]) return
+    if (effectiveVisibility.tabs[tab]) return
     setTab(visibleTabs[0]?.key ?? 'map')
-  }, [ambassadorVisibility.tabs, tab, visibleTabs])
+  }, [effectiveVisibility.tabs, tab, visibleTabs])
+
+  const submitKingPro = async (event: React.FormEvent) => {
+    event.preventDefault()
+    const input = kingProInput.trim()
+    if (!input) return
+
+    setKingProChecking(true)
+    setKingProError('')
+    const expectedPassword = await getKingProPassword(true).catch(error => {
+      console.error(error)
+      return ''
+    })
+    setKingProChecking(false)
+
+    if (!expectedPassword || input !== expectedPassword) {
+      setKingProError('Wrong password')
+      return
+    }
+
+    sessionStorage.setItem(KING_PRO_SESSION_KEY, await passwordSessionToken(KING_PRO_SCOPE, expectedPassword))
+    setKingProUnlocked(true)
+    setKingProInput('')
+  }
 
   if (!isLoaded) return (
     <div className="wire-page-full ambassador-fullscreen">
@@ -87,13 +138,45 @@ function AmbassadorContent() {
             <div id="ambassador-main-fullscreen" className="wire-panel wire-panel-soft ambassador-tab-panel fullscreen-scope">
               <FullscreenButton targetId="ambassador-main-fullscreen" />
               <div className="wire-panel-body ambassador-tab-body">
-                <div className="ambassador-tabs flex flex-wrap items-center gap-2">
-                  {visibleTabs.map(item => (
-                    <button key={item.key} onClick={()=>setTab(item.key)}
-                      className={clsx('btn', tab===item.key ? 'btn-primary' : 'btn-ghost')}>
-                      {item.icon} {item.label}
-                    </button>
-                  ))}
+                <div className="ambassador-tab-toolbar">
+                  <div className="ambassador-tabs flex flex-wrap items-center gap-2">
+                    {visibleTabs.map(item => (
+                      <button key={item.key} onClick={()=>setTab(item.key)}
+                        className={clsx('btn', tab===item.key ? 'btn-primary' : 'btn-ghost')}>
+                        {item.icon} {item.label}
+                      </button>
+                    ))}
+                  </div>
+                  <form onSubmit={submitKingPro} className={clsx('king-pro-unlock', kingProUnlocked && 'is-unlocked')}>
+                    {kingProUnlocked ? (
+                      <div className="king-pro-status">
+                        <CheckCircle2 size={15} />
+                        <span>ALL</span>
+                      </div>
+                    ) : (
+                      <>
+                        <label htmlFor="king-pro-password" className="king-pro-label">
+                          <KeyRound size={14} />
+                          รหัสเปิด pro for king
+                        </label>
+                        <input
+                          id="king-pro-password"
+                          type="password"
+                          value={kingProInput}
+                          onChange={event => {
+                            setKingProInput(event.target.value)
+                            setKingProError('')
+                          }}
+                          placeholder="Password"
+                          className="king-pro-input"
+                        />
+                        <button type="submit" disabled={kingProChecking || !kingProInput.trim()} className="king-pro-button">
+                          {kingProChecking ? 'Checking' : 'Unlock'}
+                        </button>
+                      </>
+                    )}
+                    {kingProError && <div className="king-pro-error">{kingProError}</div>}
+                  </form>
                 </div>
 
                 {!visibleTabs.length ? (
@@ -105,7 +188,7 @@ function AmbassadorContent() {
                       </div>
                     </div>
                   </div>
-                ) : tab==='map' && ambassadorVisibility.tabs.map ? (
+                ) : tab==='map' && effectiveVisibility.tabs.map ? (
                   <div className="ambassador-tab-view ambassador-map-view">
                     <div className="map-wave-filter flex flex-wrap gap-2">
                       {Array.from({length:TOTAL_WAVES},(_,i)=>i+1).map(w=>(
@@ -115,8 +198,8 @@ function AmbassadorContent() {
                         </button>
                       ))}
                     </div>
-                    <GameMap ownership={gs.showResults ? sheetOwnership.ownership : {}} filterDisaster={filterDis} readOnly
-                      kingDisaster={gs.showResults ? getActiveDisasterForWave(selWave) : null}
+                    <GameMap ownership={canSeeFullInfo ? sheetOwnership.ownership : {}} filterDisaster={filterDis} readOnly
+                      kingDisaster={canSeeFullInfo ? getActiveDisasterForWave(selWave) : null}
                       currentKing={currentKing}
                       compact />
                     <div className="ambassador-filter-row flex flex-wrap gap-2">
@@ -133,19 +216,19 @@ function AmbassadorContent() {
                       )}
                     </div>
                   </div>
-                ) : tab==='history' && ambassadorVisibility.tabs.history ? (
+                ) : tab==='history' && effectiveVisibility.tabs.history ? (
                   <div className="ambassador-tab-view space-y-3">
                     <FinanceHistory showResults />
                   </div>
-                ) : tab==='ownership' && ambassadorVisibility.tabs.ownership ? (
+                ) : tab==='ownership' && effectiveVisibility.tabs.ownership ? (
                   <div className="ambassador-tab-view space-y-3">
                     <OwnershipHistory visibleThroughWave={gs.currentWave} />
                   </div>
-                ) : tab==='lieHistory' && ambassadorVisibility.tabs.lieHistory ? (
+                ) : tab==='lieHistory' && effectiveVisibility.tabs.lieHistory ? (
                   <div className="ambassador-tab-view space-y-3">
                     <LieHistory />
                   </div>
-                ) : tab==='scoreboard' && ambassadorVisibility.tabs.scoreboard ? (
+                ) : tab==='scoreboard' && effectiveVisibility.tabs.scoreboard ? (
                   <div className="ambassador-tab-view">
                     <SharedScoreboard
                       title="Afternoon Scoreboard"
@@ -153,7 +236,7 @@ function AmbassadorContent() {
                       bgColor="bg-[#9cd4f7]"
                       csvUrlTotal={AFTERNOON_SCORE_CSV_URL}
                       showDetails={false}
-                      showNumbers={ambassadorVisibility.scoreboardNumbers}
+                      showNumbers={effectiveVisibility.scoreboardNumbers}
                       mode="embedded"
                     />
                   </div>

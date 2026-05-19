@@ -14,7 +14,7 @@ import clsx from 'clsx'
 import {
   RefreshCw, ChevronLeft, ChevronRight, Play, Square,
   Zap, Map, History, Trophy,
-  LayoutDashboard, CheckCircle2, Clock, ExternalLink,
+  LayoutDashboard, CheckCircle2, Clock, ExternalLink, RotateCcw,
 } from 'lucide-react'
 import {
   HOUSE_COLORS, HOUSE_NAMES, SHEET_BASE, TOTAL_WAVES,
@@ -48,6 +48,7 @@ function AdminContent() {
   const [sheetInputs, setSheetInputs] = useState<Record<number, WaveInputRow[]>>({})
   const [waveMeta,    setWaveMeta]    = useState<Record<number, WaveMeta>>({})
   const [savePulses,  setSavePulses]  = useState<Record<number, { count: number; at: number }>>({})
+  const [changeBaselines, setChangeBaselines] = useState<Record<string, number>>({})
   const [nowTick,     setNowTick]     = useState(() => Date.now())
   const filterDis = null
   const [toast,       setToast]       = useState<{msg:string;type:'ok'|'warn'|'err'}>()
@@ -190,6 +191,19 @@ function AdminContent() {
     notify(`${gs.gameMode === 'bet' ? 'Bet' : 'Bid'} Wave ${gs.currentWave} refreshed from Google Sheet`)
     setProcessing(false)
   }
+  const resetSubmissionCounts = () => {
+    const currentWaveSubmissions = getSubmissionsForWave(submissionWave)
+    const baselinePatch = Object.fromEntries(
+      currentWaveSubmissions.map(s => [`${s.wave}:${s.baan}`, s.revision ?? 1]),
+    )
+    submissionSnapshotRef.current = {
+      ...submissionSnapshotRef.current,
+      ...baselinePatch,
+    }
+    setChangeBaselines(prev => ({ ...prev, ...baselinePatch }))
+    setSavePulses({})
+    notify(`Reset count for Wave ${submissionWave}`)
+  }
   const hasSubmittedForGame = (row: WaveInputRow, game: 'bid'|'bet') => game === 'bet' ? row.hasBetInput : row.hasBidInput
   const viewedSubmissionRows = sheetInputs[submissionWave] ?? []
   const sheetSubmittedBaans = viewedSubmissionRows.filter(row => hasSubmittedForGame(row, submissionGame)).map(r=>r.baan)
@@ -265,6 +279,9 @@ function AdminContent() {
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="badge badge-blue">{submissionGame === 'bet' ? 'Bet game' : 'Bid game'} - Google Sheet</span>
+                        <button onClick={resetSubmissionCounts} className="btn btn-ghost py-1.5 px-2 text-xs">
+                          <RotateCcw size={12} /> reset count
+                        </button>
                         <button onClick={fetchAll} className="btn btn-ghost py-1.5 px-2 text-xs">
                           <RefreshCw size={12} /> Refresh
                         </button>
@@ -311,7 +328,8 @@ function AdminContent() {
                         const localSub = localSubmissionsCurrent.find(s => s.baan === b)
                         const pulse = savePulses[b]
                         const saving = Boolean(pulse && nowTick - pulse.at < 5000)
-                        const changes = localSub?.revision ?? pulse?.count ?? 0
+                        const baseline = localSub ? changeBaselines[`${localSub.wave}:${localSub.baan}`] ?? 0 : 0
+                        const changes = localSub ? Math.max(0, (localSub.revision ?? 1) - baseline) : pulse?.count ?? 0
                         return (
                           <div key={b} className={clsx('admin-submission-card flex min-h-14 items-center gap-3 rounded-lg border px-3 py-2.5',
                             done ? 'border-green-300 bg-green-50' : 'border-amber-200 bg-amber-50')}>

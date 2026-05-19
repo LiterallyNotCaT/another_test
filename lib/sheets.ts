@@ -503,21 +503,42 @@ export interface WritePayload {
 }
 
 // ── WRITE: Send submission to sheet via GAS ────────────────
+const SHEET_WRITE_RETRY_DELAYS_MS = [0, 600, 1400, 2600]
+
+function wait(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function shouldRetrySheetWrite(status: number, message: string) {
+  return status === 429 || status >= 500 || /busy|retry|lock|timeout|timed out|temporarily/i.test(message)
+}
+
 export async function writeToSheet(payload: WritePayload): Promise<{ ok: boolean; message?: string }> {
-  if (!GAS_URL) {
-    console.warn('NEXT_PUBLIC_GAS_URL not set - submission not sent to sheet')
-    return { ok: false, message: 'GAS URL not configured' }
+  let lastMessage = 'Google Sheet write failed'
+
+  for (let attempt = 0; attempt < SHEET_WRITE_RETRY_DELAYS_MS.length; attempt++) {
+    const delay = SHEET_WRITE_RETRY_DELAYS_MS[attempt]
+    if (delay) await wait(delay)
+
+    try {
+      const res = await fetch('/api/sheets/write', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        cache: 'no-store',
+      })
+      const data = await res.json().catch(() => ({} as { message?: string }))
+      lastMessage = data?.message || (res.ok ? 'Sent to Google Sheet' : 'Google Sheet write failed')
+      if (res.ok && data?.ok !== false) return { ok: true, message: lastMessage }
+      if (!shouldRetrySheetWrite(res.status, lastMessage)) return { ok: false, message: lastMessage }
+    } catch (e) {
+      lastMessage = e instanceof Error ? e.message : String(e)
+      if (attempt === SHEET_WRITE_RETRY_DELAYS_MS.length - 1) {
+        console.error('writeToSheet:', e)
+        return { ok: false, message: lastMessage }
+      }
+    }
   }
-  try {
-    await fetch(GAS_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload),
-    })
-    return { ok: true, message: 'Sent to Google Sheet' }
-  } catch (e) {
-    console.error('writeToSheet:', e)
-    return { ok: false, message: String(e) }
-  }
+
+  return { ok: false, message: lastMessage }
 }

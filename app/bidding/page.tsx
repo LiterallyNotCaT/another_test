@@ -146,7 +146,7 @@ function BiddingGame({ baan }: { baan:number }) {
   const fetchBalance = useCallback(async()=>{
     try {
       const wave = getGameState().currentWave
-      const url  = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&${getWaveSheetQuery(wave)}`
+      const url  = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&${getWaveSheetQuery(wave)}&t=${Date.now()}`
       const text = await (await fetch(url,{cache:'no-store'})).text()
       const js   = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/)?.[1]
       if(!js) return
@@ -322,11 +322,15 @@ function BiddingGame({ baan }: { baan:number }) {
       islands: isBetMode ? undefined : islands,
     }
     writeToSheet(payload).then(res => {
-      setSaveMessage(res.ok ? 'Sent to admin' : `Admin sync error: ${res.message ?? 'not sent'}`)
-      if (!res.ok) console.warn('Sheet write failed:', res.message)
+      setSaveMessage(res.ok ? 'Sent to wave sheet' : `Admin sync error: ${res.message ?? 'not sent'}`)
+      if (!res.ok) {
+        setIsSaved(false)
+        console.warn('Sheet write failed:', res.message)
+      }
       fetchBalance()
     }).catch(e => {
       setSaveMessage('Admin sync error')
+      setIsSaved(false)
       console.error(e)
     })
   },[baan,cart,gs.currentWave,gs.isOpen,canChooseKingDisaster,canSelectKingDisaster,kingDis,balance,totalBet,isBetMode,isSelectDisasterPhase,betTarget,betSpend,isBetAmountValid,fetchBalance,effectiveBalance,currentSubmission,islandCart,kingBid,kingBidAmount])

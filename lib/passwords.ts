@@ -8,6 +8,7 @@ const CACHE_MS = 30000
 export interface PasswordConfig {
   pages: Record<string, string>
   baans: Record<number, string>
+  kingPro: string
 }
 
 let cachedConfig: PasswordConfig | null = null
@@ -68,11 +69,18 @@ function buildPasswordConfig(rows: string[][]): PasswordConfig {
     web5: rows[4]?.[1]?.trim() ?? '',
   }
   const baans: Record<number, string> = {}
+  let kingPro = rows[24]?.[1]?.trim() ?? ''
 
   rows.forEach(row => {
     const left = String(row?.[0] ?? '').trim()
     const password = String(row?.[1] ?? '').trim()
     if (!left || !password) return
+
+    const normalizedLeft = left.toLowerCase().replace(/\s+/g, '')
+    if (normalizedLeft.includes('king') && normalizedLeft.includes('pro')) {
+      kingPro = password
+      return
+    }
 
     const pageKey = pageKeyFromLabel(left)
     if (pageKey) {
@@ -90,16 +98,16 @@ function buildPasswordConfig(rows: string[][]): PasswordConfig {
     if (password) baans[baan] = password
   }
 
-  return { pages, baans }
+  return { pages, baans, kingPro }
 }
 
 async function fetchPasswordConfigFresh(): Promise<PasswordConfig> {
-  const csvUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${PASSWORD_GID}&range=A1:B21&t=${Date.now()}`
+  const csvUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${PASSWORD_GID}&range=A1:B25&t=${Date.now()}`
   const csvRows = parseCSV(await (await fetch(csvUrl, { cache: 'no-store' })).text())
   cachedConfig = buildPasswordConfig(csvRows)
 
   if (!Object.values(cachedConfig.pages).some(Boolean)) {
-    const gvizUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${PASSWORD_GID}&range=A1:B21&t=${Date.now()}`
+    const gvizUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${PASSWORD_GID}&range=A1:B25&t=${Date.now()}`
     const text = await (await fetch(gvizUrl, { cache: 'no-store' })).text()
     const gvizRows = parseGViz(text).map(row => [cellText(row, 0), cellText(row, 1)])
     cachedConfig = buildPasswordConfig(gvizRows)
@@ -122,6 +130,11 @@ export async function getPagePassword(pageKey: string, force = false) {
 export async function getBaanPasswordFromSheet(baan: number, force = false) {
   const config = await fetchPasswordConfig(force)
   return config.baans[baan] ?? ''
+}
+
+export async function getKingProPassword(force = false) {
+  const config = await fetchPasswordConfig(force)
+  return config.kingPro ?? ''
 }
 
 export async function passwordSessionToken(scope: string, password: string) {
