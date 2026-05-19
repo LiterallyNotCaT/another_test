@@ -60,6 +60,7 @@ function BiddingCart({
   const overBudget = remaining < 0
   const hasInvalidAmount = items.some(isAmountInvalid)
   const hasKingBid = items.some(i=>i.area === 'KING')
+  const hasDisasterSummary = isDisasterPhase && kingDisaster != null
   const usagePct   = balance > 0 ? Math.min(1, totalBet / balance) : 0
   const amountControlsOpen = bidOpen && !isSyncing
   const disasterControlsOpen = disasterOpen && !isSyncing
@@ -209,7 +210,17 @@ function BiddingCart({
 
         {/* Scroll area */}
         <div className="bidding-cart-scroll flex-1 overflow-y-auto space-y-2 pr-2">
-          {items.length === 0 && (
+          {hasDisasterSummary && (
+            <div className="cart-card rounded-3xl border border-fuchsia-200 bg-fuchsia-50 p-3 text-sm text-fuchsia-950">
+              <div className="text-label text-fuchsia-700">Saved disaster</div>
+              <div className="mt-1 flex items-center justify-between gap-3">
+                <span className="font-display text-lg font-black">D{kingDisaster}</span>
+                <span className="badge badge-gold">from sheet</span>
+              </div>
+            </div>
+          )}
+
+          {items.length === 0 && !hasDisasterSummary && (
             <div className="cart-card rounded-3xl flex flex-col items-center justify-center py-12 text-slate-600">
               <div className="text-3xl mb-3 opacity-60 animate-float">🗺️</div>
               <div className="text-sm text-center leading-relaxed">

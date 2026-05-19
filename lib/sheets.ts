@@ -246,7 +246,8 @@ function parseChatBaan(value: string) {
 
 function isChatActorValue(value: string) {
   const text = cleanChatCell(value)
-  if (text.toLowerCase() === 'admin') return true
+  const lower = text.toLowerCase()
+  if (lower === 'admin' || lower === 'unknown') return true
   return parseChatBaan(text) != null
 }
 
@@ -271,7 +272,8 @@ function normalizeChatTarget(value: string) {
 
 function normalizeChatSender(value: string) {
   const text = cleanChatCell(value)
-  if (text.toLowerCase() === 'admin') return { sender: 'Admin', baan: null }
+  const lower = text.toLowerCase()
+  if (!text || lower === 'admin' || lower === 'unknown') return { sender: 'Admin', baan: null }
   const baan = parseChatBaan(text)
   if (baan != null) return { sender: String(baan), baan }
   return { sender: text, baan: null }
@@ -413,6 +415,7 @@ export async function sendGroupChatMessage(
   options: { sendTo?: string; replyToId?: string } = {}
 ): Promise<{ ok: boolean; message?: string }> {
   if (!GAS_URL) return { ok: false, message: 'GAS URL not configured' }
+  const sheetActor = actor === 'admin' ? 'Admin' : actor
   try {
     await fetch(GAS_URL, {
       method: 'POST',
@@ -420,8 +423,8 @@ export async function sendGroupChatMessage(
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
         action: 'writeChat',
-        actor,
-        baan: actor,
+        actor: sheetActor,
+        baan: sheetActor,
         message,
         sendTo: options.sendTo ?? 'public',
         replyToId: options.replyToId ?? '',

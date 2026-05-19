@@ -13,7 +13,7 @@ import {
 
 function isSameActor(message: GroupChatMessage, actor: GroupChatActor) {
   return actor === 'admin'
-    ? message.sender.toLowerCase() === 'admin'
+    ? isAdminSender(message)
     : message.baan === actor
 }
 
@@ -22,7 +22,7 @@ function actorTarget(actor: GroupChatActor) {
 }
 
 function senderTarget(message: GroupChatMessage) {
-  return message.sender.toLowerCase() === 'admin' ? 'admin' : message.baan ? String(message.baan) : ''
+  return isAdminSender(message) ? 'admin' : message.baan ? String(message.baan) : ''
 }
 
 function targetLabel(target: string) {
@@ -87,9 +87,14 @@ function actorLabel(actor: GroupChatActor) {
 }
 
 function messageSenderName(message: GroupChatMessage) {
-  if (message.sender.toLowerCase() === 'admin') return 'Admin'
+  if (isAdminSender(message)) return 'Admin'
   if (message.baan) return HOUSE_NAMES[message.baan]
   return message.sender || 'Unknown'
+}
+
+function isAdminSender(message: GroupChatMessage) {
+  const sender = String(message.sender || '').trim().toLowerCase()
+  return sender === 'admin' || sender === 'unknown' || (!sender && message.baan == null)
 }
 
 function optimisticChatTime() {
@@ -265,7 +270,7 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
             <div ref={listRef} className="group-chat-list">
               {visibleMessages.map((message, index) => {
                 const isMine = isSameActor(message, actor)
-                const isAdmin = message.sender.toLowerCase() === 'admin'
+                const isAdmin = isAdminSender(message)
                 const color = isAdmin ? '#111827' : message.baan ? HOUSE_COLORS[message.baan] : '#64748b'
                 const senderName = messageSenderName(message)
                 const replySource = message.replyToId ? messageByChatId.get(message.replyToId) : null

@@ -15,7 +15,7 @@ import {
   getGameState, saveSubmission, getSubmissionsForBaan,
   subscribeStore, getActiveDisasterForWave, setActiveDisaster, startCloudSync,
 } from '@/lib/store'
-import { fetchWaveInfo, writeToSheet } from '@/lib/sheets'
+import { fetchWaveInfo, fetchWaveInputs, writeToSheet, type WaveInputRow } from '@/lib/sheets'
 import { getBaanPasswordFromSheet, passwordSessionToken } from '@/lib/passwords'
 
 const DISASTER_IDS = Array.from({ length: 9 }, (_, i) => i + 1)
@@ -123,6 +123,22 @@ function clearBiddingDraft(key: string) {
   window.localStorage.removeItem(key)
 }
 
+function sheetInputToCart(row: WaveInputRow | null): CartItem[] {
+  if (!row) return []
+  const islands = row.islands
+    .filter(item => /^[ABC][1-9]$/.test(item.name) && item.amount > 0)
+    .slice(0, 3)
+    .map(item => ({ area: item.name, amount: item.amount }))
+  const king = row.kingAmount > 0 ? [{ area: 'KING', amount: row.kingAmount }] : []
+  return [...islands, ...king]
+}
+
+function normalizeSheetBetTarget(value: string) {
+  const match = String(value || '').match(/\d{1,2}/)
+  const baan = Number(match?.[0] ?? '')
+  return Number.isInteger(baan) && baan >= 1 && baan <= 12 ? String(baan) : ''
+}
+
 function BiddingGame({ baan }: { baan:number }) {
   const [gs,        setGS]        = useState(getGameState)
   const [cart,      setCart]      = useState<CartItem[]>([])
@@ -139,6 +155,7 @@ function BiddingGame({ baan }: { baan:number }) {
   const [betTarget, setBetTarget] = useState('')
   const [betAmount, setBetAmount] = useState('')
   const [sheetBetSpend, setSheetBetSpend] = useState(0)
+  const [sheetInput, setSheetInput] = useState<WaveInputRow | null>(null)
   const [isLoaded] = useState(true)
   const [resultToast, setResultToast] = useState<{ wave: number; key: number; leaving?: boolean } | null>(null)
   const [highlightedResultWave, setHighlightedResultWave] = useState<{ wave: number; leaving?: boolean } | null>(null)
@@ -256,6 +273,73 @@ function BiddingGame({ baan }: { baan:number }) {
       betAmount,
     })
   }, [draftReady, draftKey, isBetMode, isSelectDisasterPhase, betTarget, betAmount, kingDis, cart, isSaved])
+
+  const applySheetInput = useCallback((row: WaveInputRow | null, info: { king: number | null; kingDisaster: number | null }) => {
+    setSheetInput(row)
+    setCurrentKing(info.king)
+    setIsKing(info.king === baan)
+    setActiveDisaster(gs.currentWave, info.kingDisaster)
+    setSheetBetSpend(row?.betAmount || 0)
+    if (row) setBalance(row.balance || 0)
+
+    const state = getGameState()
+    const hasLocalDraft = readBiddingDraft(draftKey) !== null
+    const mayHydrateFromSheet = !hasLocalDraft && !saveInFlight.current && isSaved && !isSyncing
+
+    if (state.gamePhase === 'select-disaster') {
+      if (!(state.isOpen && info.king === baan && !isSaved)) {
+        setKingDis(info.kingDisaster)
+      }
+      if (mayHydrateFromSheet) {
+        const sheetCart = sheetInputToCart(row)
+        setCart(sheetCart)
+        if (sheetCart.length > 0 || info.kingDisaster != null) {
+          setSavedAt('Sheet')
+          setSaveMessage('')
+        }
+      }
+      return
+    }
+
+    if (!mayHydrateFromSheet) return
+
+    if (isBetMode) {
+      if (row?.hasBetInput) {
+        const nextTarget = normalizeSheetBetTarget(row.betTarget)
+        if (nextTarget) setBetTarget(nextTarget)
+        if (row.betAmount > 0) setBetAmount(String(row.betAmount))
+        setSavedAt('Sheet')
+        setSaveMessage('')
+      }
+      return
+    }
+
+    if (row?.hasBidInput) {
+      const sheetCart = sheetInputToCart(row)
+      setCart(sheetCart)
+      setSavedAt('Sheet')
+      setSaveMessage('')
+    }
+  }, [baan, draftKey, gs.currentWave, isBetMode, isSaved, isSyncing])
+
+  const fetchSheetSnapshot = useCallback(async () => {
+    try {
+      const wave = getGameState().currentWave
+      const data = await fetchWaveInputs(wave)
+      if (wave !== getGameState().currentWave) return
+      const row = data.rows.find(item => item.baan === baan) ?? null
+      applySheetInput(row, { king: data.king, kingDisaster: data.kingDisaster })
+    } catch (e) {
+      console.error(e)
+    }
+  }, [applySheetInput, baan])
+
+  useEffect(() => {
+    const refresh = () => { void fetchSheetSnapshot() }
+    const initial = setTimeout(refresh, 0)
+    const t = setInterval(refresh, 12000)
+    return () => { clearTimeout(initial); clearInterval(t) }
+  }, [fetchSheetSnapshot])
 
   /* fetch balance from Wave sheet */
   const fetchBalance = useCallback(async()=>{
@@ -458,7 +542,10 @@ function BiddingGame({ baan }: { baan:number }) {
       setIsSaved(true)
       setSavedAt(timestamp)
       clearBiddingDraft(draftKey)
-      setTimeout(() => { void fetchBalance() }, 300)
+      setTimeout(() => {
+        void fetchBalance()
+        void fetchSheetSnapshot()
+      }, 300)
     }).catch(e => {
       saveInFlight.current = false
       setIsSyncing(false)
@@ -466,7 +553,7 @@ function BiddingGame({ baan }: { baan:number }) {
       setIsSaved(false)
       console.error(e)
     })
-  },[baan,cart,gs.currentWave,gs.isOpen,canChooseKingDisaster,canSelectKingDisaster,kingDis,balance,totalBet,isBetMode,isSelectDisasterPhase,betTarget,betSpend,isBetAmountValid,fetchBalance,effectiveBalance,currentSubmission,islandCart,kingBid,kingBidAmount,draftKey])
+  },[baan,cart,gs.currentWave,gs.isOpen,canChooseKingDisaster,canSelectKingDisaster,kingDis,balance,totalBet,isBetMode,isSelectDisasterPhase,betTarget,betSpend,isBetAmountValid,fetchBalance,fetchSheetSnapshot,effectiveBalance,currentSubmission,islandCart,kingBid,kingBidAmount,draftKey])
 
   /* autosave */
   useEffect(()=>{
