@@ -1629,10 +1629,10 @@ body {
 .disaster-filter:nth-of-type(8) { border-color: #1d4ed8; background: #dbeafe; }
 .disaster-filter:nth-of-type(9) { border-color: #9333ea; background: #f3e8ff; }
 .disaster-filter.active {
-  background: #312e81 !important;
+  background: #111827 !important;
   border-color: #facc15 !important;
   color: #fff !important;
-  box-shadow: 0 0 0 3px rgba(250,204,21,0.55), 0 10px 22px rgba(49,46,129,0.28) !important;
+  box-shadow: 0 0 0 3px rgba(250,204,21,0.7), 0 12px 26px rgba(15,23,42,0.38) !important;
 }
 @media (max-width: 900px) {
   .wire-pill-row > .ml-auto,
@@ -3572,34 +3572,48 @@ form .btn.w-full {
 }
 .game-map .map-tile-king .map-tile-area { color: #744b00 !important; }
 .game-map .map-tile-filter-hit {
-  background: #312e81 !important;
+  background: #111827 !important;
   border-color: #facc15 !important;
   color: #fff !important;
-  box-shadow: inset 0 0 0 2px #facc15, 0 10px 24px rgba(49,46,129,0.38) !important;
+  box-shadow: inset 0 0 0 3px #facc15, 0 14px 30px rgba(15,23,42,0.45) !important;
 }
 .game-map .map-tile-king-hit-selection {
-  background: #be185d !important;
-  border-color: #facc15 !important;
+  background: #881337 !important;
+  border-color: #22d3ee !important;
   color: #fff !important;
-  box-shadow: inset 0 0 0 2px #facc15, 0 12px 26px rgba(190,24,93,0.44) !important;
+  box-shadow: inset 0 0 0 3px #22d3ee, 0 14px 30px rgba(136,19,55,0.48) !important;
 }
 .game-map .map-tile-king-hit-result {
-  background: #fee2e2 !important;
-  border-color: #b91c1c !important;
-  box-shadow: inset 0 0 0 2px #b91c1c, 0 10px 22px rgba(185,28,28,0.28) !important;
+  background: #fecaca !important;
+  border-color: #991b1b !important;
+  box-shadow: inset 0 0 0 3px #991b1b, 0 12px 26px rgba(153,27,27,0.34) !important;
 }
 .game-map .map-tile-filter-hit .map-tile-area,
 .game-map .map-tile-king-hit-selection .map-tile-area {
   color: #fff !important;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+  text-shadow: 0 2px 4px rgba(0,0,0,0.55);
 }
 .game-map .map-tile-king-hit-result .map-tile-area {
-  color: #7f1d1d !important;
+  color: #450a0a !important;
+  text-shadow: none !important;
 }
 .game-map .map-tile-filter-hit .map-tile-disasters span,
 .game-map .map-tile-king-hit-selection .map-tile-disasters span {
-  background: #fff !important;
+  background: #fef3c7 !important;
   color: #111827 !important;
+  border: 1px solid #facc15 !important;
+}
+.game-map .map-tile-filter-hit .map-tile-owner,
+.game-map .map-tile-king-hit-selection .map-tile-owner {
+  background: #ffffff !important;
+  color: var(--owner-color) !important;
+  border: 1px solid rgba(255,255,255,0.86) !important;
+}
+.game-map .map-tile-filter-hit.map-tile-selected,
+.game-map .map-tile-king-hit-selection.map-tile-selected,
+.game-map .map-tile-king-hit-result.map-tile-selected {
+  outline: 4px solid #facc15 !important;
+  outline-offset: 2px !important;
 }
 .game-map .map-tile-owner {
   min-height: 13px;

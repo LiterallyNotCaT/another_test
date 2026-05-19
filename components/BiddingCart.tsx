@@ -18,6 +18,7 @@ interface BiddingCartProps {
   isSaved:       boolean
   savedAt?:      string
   isOpen:        boolean
+  isSyncing?:     boolean
   bidOpen?:      boolean
   disasterOpen?: boolean
   isDisasterPhase?: boolean
@@ -43,7 +44,7 @@ function getAreaDisasters(area: string): number[] {
 function BiddingCart({
   baan, balance, items, isKing, kingDisaster,
   onUpdate, onKingDisaster, onSubmit, isSaved, savedAt, isOpen,
-  bidOpen = isOpen, disasterOpen = isOpen && isKing, isDisasterPhase = false,
+  isSyncing = false, bidOpen = isOpen, disasterOpen = isOpen && isKing, isDisasterPhase = false,
 }: BiddingCartProps) {
   const color      = HOUSE_COLORS[baan]
   const maxAmountForArea = (area: string) => {
@@ -60,9 +61,11 @@ function BiddingCart({
   const hasInvalidAmount = items.some(isAmountInvalid)
   const hasKingBid = items.some(i=>i.area === 'KING')
   const usagePct   = balance > 0 ? Math.min(1, totalBet / balance) : 0
-  const submitEnabled = isDisasterPhase
+  const amountControlsOpen = bidOpen && !isSyncing
+  const disasterControlsOpen = disasterOpen && !isSyncing
+  const submitEnabled = !isSyncing && (isDisasterPhase
     ? disasterOpen && kingDisaster != null
-    : bidOpen && items.length > 0 && !overBudget && !hasInvalidAmount
+    : bidOpen && items.length > 0 && !overBudget && !hasInvalidAmount)
   const [draftAmounts, setDraftAmounts] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -157,7 +160,7 @@ function BiddingCart({
           </div>
           {!isDisasterPhase && !hasKingBid && (
             <button type="button" onClick={()=>onUpdate([...items, { area: 'KING', amount: balance >= 100 ? 100 : 0 }])}
-              disabled={!bidOpen || balance < 100}
+              disabled={!amountControlsOpen || balance < 100}
               className="btn btn-ghost mt-2 w-full">
               Add KING bid
             </button>
@@ -167,7 +170,7 @@ function BiddingCart({
             {DISASTER_IDS.map(n => {
               const active = kingDisaster === n
               return (
-                <button key={n} onClick={()=>onKingDisaster(active?null:n)} disabled={!disasterOpen}
+                <button key={n} onClick={()=>onKingDisaster(active?null:n)} disabled={!disasterControlsOpen}
                   className={clsx(
                     'min-h-14 rounded-2xl border-2 px-3 py-3 text-center font-mono text-lg font-black transition-all active:scale-95',
                     active
@@ -192,10 +195,10 @@ function BiddingCart({
           <span className="text-label">พื้นที่ที่เลือก <span className="text-blue-500">({items.length})</span></span>
           {items.length > 0 && (
             <button onClick={()=>onUpdate([])}
-              disabled={!bidOpen}
+              disabled={!amountControlsOpen}
               className={clsx(
                 'rounded-lg border px-3 py-1.5 text-2xs font-display font-semibold transition-colors',
-                bidOpen
+                amountControlsOpen
                   ? 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700'
                   : 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed',
               )}>
@@ -243,7 +246,7 @@ function BiddingCart({
                       </div>
                     )}
                   </div>
-                  <button onClick={()=>remove(item.area)} disabled={!bidOpen}
+                  <button onClick={()=>remove(item.area)} disabled={!amountControlsOpen}
                     className="w-7 h-7 rounded-xl bg-red-500/10 text-red-500/60 hover:bg-red-500/20 hover:text-red-300
                       flex items-center justify-center transition-all disabled:opacity-30 flex-shrink-0">
                     <X size={11} />
@@ -252,17 +255,17 @@ function BiddingCart({
 
                 {/* Row 2: amount stepper */}
                 <div className="flex items-center gap-1.5">
-                  <button onClick={()=>step(item.area,-100)} disabled={!bidOpen||item.amount<=100}
+                  <button onClick={()=>step(item.area,-100)} disabled={!amountControlsOpen||item.amount<=100}
                     className="w-8 h-8 rounded-xl glass-light action-pill flex items-center justify-center text-slate-400
                       hover:text-white hover:bg-white/8 transition-all disabled:opacity-25 active:scale-90">
                     <Minus size={12} />
                   </button>
                   <input type="text" inputMode="numeric" pattern="[0-9]*"
-                    value={draftAmounts[item.area] ?? String(item.amount)} disabled={!bidOpen}
+                    value={draftAmounts[item.area] ?? String(item.amount)} disabled={!amountControlsOpen}
                     onChange={e=>setRawAmount(item.area,e.target.value)}
                     onBlur={()=>clampAmount(item.area)}
                     className="flex-1 input-base text-center font-mono text-sm py-2 min-w-0" />
-                  <button onClick={()=>step(item.area,100)} disabled={!bidOpen||remaining<=0}
+                  <button onClick={()=>step(item.area,100)} disabled={!amountControlsOpen||remaining<=0}
                     className="w-8 h-8 rounded-xl glass-light action-pill flex items-center justify-center text-slate-400
                       hover:text-white hover:bg-white/8 transition-all disabled:opacity-25 active:scale-90">
                     <Plus size={12} />
@@ -270,18 +273,18 @@ function BiddingCart({
                 </div>
 
                 {/* Row 3: presets */}
-                {bidOpen && (
+                {amountControlsOpen && (
                   <div className="flex gap-1">
                     {PRESETS.map(p => (
                       <button key={p} onClick={()=>updateAmount(item.area,item.amount+p)}
-                        disabled={!bidOpen || item.amount + p > maxAmount}
+                        disabled={!amountControlsOpen || item.amount + p > maxAmount}
                         className="flex-1 py-1.5 rounded-xl glass-light action-pill text-2xs font-display font-semibold
                           text-slate-600 hover:text-slate-300 hover:bg-white/6 transition-all disabled:opacity-20">
                         +{p}
                       </button>
                     ))}
                     <button onClick={()=>updateAmount(item.area,maxAmount)}
-                      disabled={!bidOpen || maxAmount < 100}
+                      disabled={!amountControlsOpen || maxAmount < 100}
                       className="flex-1 py-1.5 rounded-xl action-pill text-2xs font-display font-semibold
                         text-cyan-700 hover:text-cyan-400 hover:bg-cyan-500/8 transition-all disabled:opacity-20">
                       MAX
@@ -299,13 +302,19 @@ function BiddingCart({
         {/* Save status */}
         <div className={clsx(
           'flex items-center gap-2 px-3 py-2 rounded-2xl text-xs font-display transition-all toast-lift',
-          isSaved
+          isSyncing
+            ? 'bg-blue-500/10 text-blue-300 border border-blue-400/20'
+            : isSaved
             ? 'bg-green-500/10 text-green-300 border border-green-400/20'
             : 'bg-yellow-500/10 text-yellow-300 border border-yellow-400/20'
         )}>
-          <span className="text-base leading-none">{isSaved ? '✓' : '⏳'}</span>
+          <span className="text-base leading-none">{isSyncing ? '⏳' : isSaved ? '✓' : '⏳'}</span>
           <span className="flex-1 truncate text-2xs">
-            {isSaved ? (savedAt ? `Saved · ${savedAt}` : 'Saved') : 'Unsaved — autosave ใน 5 วิ'}
+            {isSyncing
+              ? 'Sending to admin...'
+              : isSaved
+                ? (savedAt ? `Saved · ${savedAt}` : 'Saved')
+                : 'Unsaved — autosave ใน 5 วิ'}
           </span>
         </div>
 
@@ -322,7 +331,8 @@ function BiddingCart({
             background: `linear-gradient(135deg, ${color}, ${color}aa)`,
             boxShadow: `0 0 20px ${color}30`,
           } : undefined}>
-          {!isOpen ? '🔒 ปิดรับการลงทุน'
+          {isSyncing ? 'Sending to admin...'
+            : !isOpen ? '🔒 ปิดรับการลงทุน'
             : isDisasterPhase && !disasterOpen ? 'King is choosing disaster'
             : isDisasterPhase && kingDisaster == null ? 'Select disaster ID'
             : isDisasterPhase ? `Confirm disaster D${kingDisaster}`

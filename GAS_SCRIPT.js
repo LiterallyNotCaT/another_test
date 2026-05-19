@@ -271,13 +271,33 @@ function handleWriteWave(payload) {
 
   // Row for this baan (บ้าน 1 = row 5, บ้าน 2 = row 6, ...)
   const row = DATA_START_ROW + baanNumber - 1
+  const hasIslandPayload = normalizedIslands.length > 0
+  const islandSpend = hasIslandPayload ? normalizedIslands.reduce((sum, isl) => sum + isl.amount, 0) : 0
+  const hasDisasterOnlyPayload = hasKingDisasterPayload && !hasBetPayload && !hasIslandPayload && kingAmountNumber === null
+
+  // Disaster selection is one shared INFO cell (H22) and should not be blocked by
+  // bid/bet balance validation or existing spend in the player's row.
+  if (hasDisasterOnlyPayload) {
+    const disasterCell = sheet.getRange(22, 8)
+    if (kingDisaster === null || kingDisaster === '') disasterCell.clearContent()
+    else disasterCell.setValue(kingDisasterNumber)
+    SpreadsheetApp.flush()
+    return {
+      status: 'ok',
+      message: `บ้าน ${baanNumber} Wave ${waveNumber} saved disaster`,
+      written: {
+        row,
+        kingDisaster: kingDisasterNumber,
+        islands: [],
+        totalSpend: 0,
+        remainingBalance: null,
+      }
+    }
+  }
 
   // ── Read current balance to validate ──────────────────
   const currentBalance = cellNumber_(sheet.getRange(row, COL.BALANCE))
   const minBetAmount = Math.ceil(currentBalance * 0.1)
-  const hasIslandPayload = normalizedIslands.length > 0
-  const islandSpend = hasIslandPayload ? normalizedIslands.reduce((sum, isl) => sum + isl.amount, 0) : 0
-  const hasDisasterOnlyPayload = hasKingDisasterPayload && !hasBetPayload && !hasIslandPayload && kingAmountNumber === null
   const existingBetSpend = cellNumber_(sheet.getRange(row, COL.BET_AMOUNT))
   const existingKingSpend = cellNumber_(sheet.getRange(row, COL.KING_AMOUNT))
   const existingIslandSpend =
@@ -301,7 +321,7 @@ function handleWriteWave(payload) {
       message: 'Amount must be greater than 0'
     }
   }
-  if (totalSpendAfterSave > currentBalance) {
+  if (!hasDisasterOnlyPayload && totalSpendAfterSave > currentBalance) {
     return {
       status: 'error',
       message: `ยอดรวม ${totalSpendAfterSave} เกินกว่า balance ${currentBalance}`

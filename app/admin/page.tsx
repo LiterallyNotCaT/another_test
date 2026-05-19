@@ -39,7 +39,19 @@ const AMBASSADOR_TAB_CONTROLS: Array<{ key: AmbassadorTabKey; label: string }> =
   { key: 'lieHistory', label: 'Lie history' },
 ]
 
+function submissionKey(wave: number, baan: number) {
+  return `${wave}:${baan}`
+}
+
+function getSubmissionRevisionMap() {
+  return Object.fromEntries(
+    getSubmissions().map(s => [submissionKey(s.wave, s.baan), s.revision ?? 1]),
+  )
+}
+
 function AdminContent() {
+  const initialRevisionMap = useRef<Record<string, number> | null>(null)
+  if (initialRevisionMap.current === null) initialRevisionMap.current = getSubmissionRevisionMap()
   const [gs,          setGS]          = useState(getGameState())
   const [tab,         setTab]         = useState<'dashboard'|'map'|'history'|'ownership'|'lieHistory'|'leaderboard'>('dashboard')
   const [mapWave,     setMapWave]     = useState(getGameState().currentWave)
@@ -47,8 +59,7 @@ function AdminContent() {
   const [submissionGame, setSubmissionGame] = useState<'bid'|'bet'>(getGameState().gameMode === 'bet' ? 'bet' : 'bid')
   const [sheetInputs, setSheetInputs] = useState<Record<number, WaveInputRow[]>>({})
   const [waveMeta,    setWaveMeta]    = useState<Record<number, WaveMeta>>({})
-  const [savePulses,  setSavePulses]  = useState<Record<number, { count: number; at: number }>>({})
-  const [changeBaselines, setChangeBaselines] = useState<Record<string, number>>({})
+  const [savePulses,  setSavePulses]  = useState<Record<string, { count: number; at: number }>>({})
   const [nowTick,     setNowTick]     = useState(() => Date.now())
   const filterDis = null
   const [toast,       setToast]       = useState<{msg:string;type:'ok'|'warn'|'err'}>()
@@ -59,7 +70,7 @@ function AdminContent() {
     return String(BID_PLAY_MINUTES)
   })
   const [processing,  setProcessing]  = useState(false)
-  const submissionSnapshotRef = useRef<Record<string, number>>({})
+  const submissionSnapshotRef = useRef<Record<string, number>>(initialRevisionMap.current ?? {})
   const sheetOwnership = useWaveOwnership(mapWave)
 
   const notify = (msg:string, type:'ok'|'warn'|'err'='ok') => {
@@ -99,25 +110,25 @@ function AdminContent() {
       const nextState = getGameState()
       setGS(nextState)
       if (key === 'biggame_submissions') {
-        const current = getSubmissionsForWave(nextState.currentWave)
+        const current = getSubmissions()
         const snapshot = submissionSnapshotRef.current
-        const changedBaans = current
+        const changedSubmissions = current
           .filter(s => {
             const revision = s.revision ?? 1
-            const id = `${s.wave}:${s.baan}`
+            const id = submissionKey(s.wave, s.baan)
             return snapshot[id] !== revision
           })
-          .map(s => s.baan)
+          .map(s => ({ id: submissionKey(s.wave, s.baan), revision: s.revision ?? 1 }))
         submissionSnapshotRef.current = {
           ...snapshot,
-          ...Object.fromEntries(current.map(s => [`${s.wave}:${s.baan}`, s.revision ?? 1])),
+          ...Object.fromEntries(current.map(s => [submissionKey(s.wave, s.baan), s.revision ?? 1])),
         }
-        if (!changedBaans.length) return
+        if (!changedSubmissions.length) return
         const now = Date.now()
         setSavePulses(prev => {
           const next = { ...prev }
-          changedBaans.forEach(baan => {
-            next[baan] = { count: (prev[baan]?.count ?? 0) + 1, at: now }
+          changedSubmissions.forEach(({ id }) => {
+            next[id] = { count: (prev[id]?.count ?? 0) + 1, at: now }
           })
           return next
         })
@@ -127,9 +138,8 @@ function AdminContent() {
   },[])
 
   useEffect(() => {
-    submissionSnapshotRef.current = Object.fromEntries(
-      getSubmissions().map(s => [`${s.wave}:${s.baan}`, s.revision ?? 1]),
-    )
+    const currentRevisions = getSubmissionRevisionMap()
+    submissionSnapshotRef.current = currentRevisions
   }, [])
 
   useEffect(() => {
@@ -194,14 +204,15 @@ function AdminContent() {
   const resetSubmissionCounts = () => {
     const currentWaveSubmissions = getSubmissionsForWave(submissionWave)
     const baselinePatch = Object.fromEntries(
-      currentWaveSubmissions.map(s => [`${s.wave}:${s.baan}`, s.revision ?? 1]),
+      currentWaveSubmissions.map(s => [submissionKey(s.wave, s.baan), s.revision ?? 1]),
     )
     submissionSnapshotRef.current = {
       ...submissionSnapshotRef.current,
       ...baselinePatch,
     }
-    setChangeBaselines(prev => ({ ...prev, ...baselinePatch }))
-    setSavePulses({})
+    setSavePulses(prev => Object.fromEntries(
+      Object.entries(prev).filter(([id]) => !id.startsWith(`${submissionWave}:`)),
+    ))
     notify(`Reset count for Wave ${submissionWave}`)
   }
   const hasSubmittedForGame = (row: WaveInputRow, game: 'bid'|'bet') => game === 'bet' ? row.hasBetInput : row.hasBidInput
@@ -326,10 +337,10 @@ function AdminContent() {
                         const row = viewedSubmissionRows.find(r=>r.baan===b)
                         const done = row ? hasSubmittedForGame(row, submissionGame) : false
                         const localSub = localSubmissionsCurrent.find(s => s.baan === b)
-                        const pulse = savePulses[b]
+                        const localKey = submissionKey(submissionWave, b)
+                        const pulse = savePulses[localKey]
                         const saving = Boolean(pulse && nowTick - pulse.at < 5000)
-                        const baseline = localSub ? changeBaselines[`${localSub.wave}:${localSub.baan}`] ?? 0 : 0
-                        const changes = localSub ? Math.max(0, (localSub.revision ?? 1) - baseline) : pulse?.count ?? 0
+                        const changes = pulse?.count ?? 0
                         return (
                           <div key={b} className={clsx('admin-submission-card flex min-h-14 items-center gap-3 rounded-lg border px-3 py-2.5',
                             done ? 'border-green-300 bg-green-50' : 'border-amber-200 bg-amber-50')}>

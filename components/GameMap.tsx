@@ -121,24 +121,25 @@ function GameMap({
                   bg = `${c}1a`; border = `${c}55`; textColor = c
                 }
                 if (filterSet != null) {
-                  if (isFiltered)  { bg='#312e81'; border='#facc15'; textColor='#ffffff' }
-                  if (dimmed)      { bg='rgba(13,17,23,0.5)'; border='rgba(255,255,255,0.03)'; textColor='#1e293b' }
+                  if (isFiltered)  { bg='#111827'; border='#fde047'; textColor='#ffffff' }
+                  if (dimmed)      { bg='rgba(226,232,240,0.52)'; border='rgba(148,163,184,0.26)'; textColor='#94a3b8' }
                 }
                 if (isKingHit && !filterSet) {
                   if (kingDisasterTone === 'selection') {
-                    bg = '#be185d'
-                    border = '#facc15'
+                    bg = '#881337'
+                    border = '#22d3ee'
                     textColor = '#ffffff'
                   } else {
-                    bg = '#fee2e2'
-                    border = '#b91c1c'
-                    textColor = '#7f1d1d'
+                    bg = '#fecaca'
+                    border = '#991b1b'
+                    textColor = '#450a0a'
                   }
                 }
                 if (isSelected) {
-                  bg = isKingHit && !filterSet ? bg : isKingIsland ? 'rgba(245,158,11,0.32)' : 'rgba(245,158,11,0.15)'
-                  border = 'rgba(245,158,11,0.86)'
-                  textColor = isKingHit && !filterSet ? textColor : '#92400e'
+                  const preserveHighlight = isFiltered || isKingHit
+                  bg = preserveHighlight ? bg : isKingIsland ? 'rgba(245,158,11,0.32)' : 'rgba(245,158,11,0.15)'
+                  border = preserveHighlight ? border : 'rgba(245,158,11,0.86)'
+                  textColor = preserveHighlight ? textColor : '#92400e'
                 }
 
                 return (
