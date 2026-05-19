@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, type ReactNode } from 'react'
+import { useState, useEffect, useRef, type ReactNode } from 'react'
 import AuthGuard from '@/components/AuthGuard'
 import HomeButton from '@/components/HomeButton'
 import FinanceHistory from '@/components/FinanceHistory'
@@ -27,6 +27,7 @@ const TAB_META: Array<{ key: AmbassadorTabKey; label: string; icon: ReactNode }>
 ]
 const KING_PRO_SCOPE = 'ambassador:king-pro'
 const KING_PRO_SESSION_KEY = 'ambassador_king_pro'
+const KING_PRO_RETURN_TAB_KEY = 'ambassador_king_pro_return_tab'
 
 function AmbassadorContent() {
   const [tab,         setTab]         = useState<AmbassadorTabKey>('map')
@@ -39,6 +40,7 @@ function AmbassadorContent() {
   const [kingProUnlocked, setKingProUnlocked] = useState(false)
   const [kingProChecking, setKingProChecking] = useState(false)
   const [kingProError, setKingProError] = useState('')
+  const tabBeforeKingProRef = useRef<AmbassadorTabKey>('map')
   const sheetOwnership = useWaveOwnership(selWave)
   const ambassadorVisibility = normalizeAmbassadorVisibility(gs.ambassadorVisibility)
   const effectiveVisibility = kingProUnlocked
@@ -65,6 +67,10 @@ function AmbassadorContent() {
         if (cancelled || !password) return
         const token = await passwordSessionToken(KING_PRO_SCOPE, password)
         if (!cancelled && sessionStorage.getItem(KING_PRO_SESSION_KEY) === token) {
+          const storedTab = sessionStorage.getItem(KING_PRO_RETURN_TAB_KEY)
+          if (TAB_META.some(item => item.key === storedTab)) {
+            tabBeforeKingProRef.current = storedTab as AmbassadorTabKey
+          }
           setKingProUnlocked(true)
         }
       })
@@ -89,6 +95,17 @@ function AmbassadorContent() {
     setTab(visibleTabs[0]?.key ?? 'map')
   }, [effectiveVisibility.tabs, tab, visibleTabs])
 
+  const disableKingPro = () => {
+    const returnTab = tabBeforeKingProRef.current
+    const fallbackTab = TAB_META.find(item => ambassadorVisibility.tabs[item.key])?.key ?? 'map'
+    sessionStorage.removeItem(KING_PRO_SESSION_KEY)
+    sessionStorage.removeItem(KING_PRO_RETURN_TAB_KEY)
+    setKingProUnlocked(false)
+    setKingProInput('')
+    setKingProError('')
+    setTab(ambassadorVisibility.tabs[returnTab] ? returnTab : fallbackTab)
+  }
+
   const submitKingPro = async (event: React.FormEvent) => {
     event.preventDefault()
     const input = kingProInput.trim()
@@ -107,6 +124,8 @@ function AmbassadorContent() {
       return
     }
 
+    tabBeforeKingProRef.current = tab
+    sessionStorage.setItem(KING_PRO_RETURN_TAB_KEY, tab)
     sessionStorage.setItem(KING_PRO_SESSION_KEY, await passwordSessionToken(KING_PRO_SCOPE, expectedPassword))
     setKingProUnlocked(true)
     setKingProInput('')
@@ -149,10 +168,15 @@ function AmbassadorContent() {
                   </div>
                   <form onSubmit={submitKingPro} className={clsx('king-pro-unlock', kingProUnlocked && 'is-unlocked')}>
                     {kingProUnlocked ? (
-                      <div className="king-pro-status">
-                        <CheckCircle2 size={15} />
-                        <span>ALL</span>
-                      </div>
+                      <>
+                        <div className="king-pro-status">
+                          <CheckCircle2 size={15} />
+                          <span>ALL</span>
+                        </div>
+                        <button type="button" onClick={disableKingPro} className="king-pro-disable">
+                          disabled pro
+                        </button>
+                      </>
                     ) : (
                       <>
                         <label htmlFor="king-pro-password" className="king-pro-label">

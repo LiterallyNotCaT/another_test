@@ -2950,6 +2950,8 @@ form .btn.w-full {
 .king-pro-unlock.is-unlocked {
   flex: 0 0 auto;
   display: inline-flex;
+  align-items: center;
+  gap: 8px;
   border-color: #86efac;
   background: #f0fdf4;
 }
@@ -2999,6 +3001,20 @@ form .btn.w-full {
   font-size: 0.82rem;
   font-weight: 1000;
   letter-spacing: 0.08em;
+}
+.king-pro-disable {
+  height: 30px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #bbf7d0;
+  padding: 0 10px;
+  color: #166534;
+  font-size: 0.72rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+.king-pro-disable:hover {
+  background: #dcfce7;
 }
 .king-pro-error {
   position: absolute;
