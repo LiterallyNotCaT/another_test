@@ -23,8 +23,12 @@ interface BiddingCartProps {
   isDisasterPhase?: boolean
 }
 
-const PRESETS = [100, 500, 1000]
+const PRESETS = [500, 1000, 5000]
 const DISASTER_IDS = Array.from({ length: 9 }, (_, i) => i + 1)
+
+function sanitizeMoneyInput(value: string) {
+  return value.replace(/[^\d]/g, '')
+}
 
 function getAreaDisasters(area: string): number[] {
   if (area === 'KING') return []
@@ -42,10 +46,18 @@ function BiddingCart({
   bidOpen = isOpen, disasterOpen = isOpen && isKing, isDisasterPhase = false,
 }: BiddingCartProps) {
   const color      = HOUSE_COLORS[baan]
+  const maxAmountForArea = (area: string) => {
+    const otherTotal = items.reduce((sum, item) => item.area === area ? sum : sum + item.amount, 0)
+    return Math.max(0, balance - otherTotal)
+  }
+  const isAmountInvalid = (item: CartItem) => {
+    const max = maxAmountForArea(item.area)
+    return !Number.isFinite(item.amount) || item.amount < 100 || item.amount > max
+  }
   const totalBet   = items.reduce((s,i)=>s+i.amount, 0)
   const remaining  = balance - totalBet
   const overBudget = remaining < 0
-  const hasInvalidAmount = items.some(i=>i.amount < 100)
+  const hasInvalidAmount = items.some(isAmountInvalid)
   const hasKingBid = items.some(i=>i.area === 'KING')
   const usagePct   = balance > 0 ? Math.min(1, totalBet / balance) : 0
   const submitEnabled = isDisasterPhase
@@ -58,18 +70,32 @@ function BiddingCart({
   }, [items])
 
   const updateAmount = (area: string, raw: number) => {
-    const prev   = items.find(i=>i.area===area)?.amount || 0
-    const maxAdd = remaining + prev
-    const val    = maxAdd >= 100 ? Math.min(Math.max(100, isNaN(raw) ? 100 : raw), maxAdd) : 0
+    const max = maxAmountForArea(area)
+    const val = max >= 100 && Number.isFinite(raw)
+      ? Math.min(Math.max(100, raw), max)
+      : 0
     onUpdate(items.map(i => i.area===area ? {...i, amount:val} : i))
     setDraftAmounts(prevDraft => ({ ...prevDraft, [area]: String(val) }))
   }
   const setRawAmount = (area: string, raw: string) => {
-    setDraftAmounts(prevDraft => ({ ...prevDraft, [area]: raw }))
+    const nextRaw = sanitizeMoneyInput(raw)
+    const nextAmount = nextRaw === '' ? 0 : Number(nextRaw)
+    setDraftAmounts(prevDraft => ({ ...prevDraft, [area]: nextRaw }))
+    onUpdate(items.map(i => i.area===area ? {...i, amount:Number.isFinite(nextAmount) ? nextAmount : 0} : i))
   }
   const clampAmount = (area: string) => {
-    const val = Number(draftAmounts[area])
-    updateAmount(area, Number.isFinite(val) ? val : 100)
+    const draft = draftAmounts[area] ?? ''
+    if (draft.trim() === '') {
+      onUpdate(items.map(i => i.area===area ? {...i, amount:0} : i))
+      return
+    }
+    const val = Number(draft)
+    if (!Number.isFinite(val)) {
+      setDraftAmounts(prevDraft => ({ ...prevDraft, [area]: '' }))
+      onUpdate(items.map(i => i.area===area ? {...i, amount:0} : i))
+      return
+    }
+    updateAmount(area, val)
   }
   const remove = (area: string)  => onUpdate(items.filter(i=>i.area!==area))
   const step   = (area: string, d: number) => {
@@ -194,6 +220,7 @@ function BiddingCart({
             const grp        = item.area[0]
             const isKingItem = item.area === 'KING'
             const rate       = isKingItem ? 'King' : grp==='A'?'180%':grp==='B'?'160%':'140%'
+            const maxAmount = maxAmountForArea(item.area)
 
             return (
               <div key={item.area} className={clsx(
@@ -230,7 +257,8 @@ function BiddingCart({
                       hover:text-white hover:bg-white/8 transition-all disabled:opacity-25 active:scale-90">
                     <Minus size={12} />
                   </button>
-                  <input type="number" value={draftAmounts[item.area] ?? String(item.amount)} min={100} max={balance} step={100} disabled={!bidOpen}
+                  <input type="text" inputMode="numeric" pattern="[0-9]*"
+                    value={draftAmounts[item.area] ?? String(item.amount)} disabled={!bidOpen}
                     onChange={e=>setRawAmount(item.area,e.target.value)}
                     onBlur={()=>clampAmount(item.area)}
                     className="flex-1 input-base text-center font-mono text-sm py-2 min-w-0" />
@@ -246,14 +274,14 @@ function BiddingCart({
                   <div className="flex gap-1">
                     {PRESETS.map(p => (
                       <button key={p} onClick={()=>updateAmount(item.area,item.amount+p)}
-                        disabled={p>remaining}
+                        disabled={!bidOpen || item.amount + p > maxAmount}
                         className="flex-1 py-1.5 rounded-xl glass-light action-pill text-2xs font-display font-semibold
                           text-slate-600 hover:text-slate-300 hover:bg-white/6 transition-all disabled:opacity-20">
                         +{p}
                       </button>
                     ))}
-                    <button onClick={()=>updateAmount(item.area,remaining+item.amount)}
-                      disabled={remaining<=0}
+                    <button onClick={()=>updateAmount(item.area,maxAmount)}
+                      disabled={!bidOpen || maxAmount < 100}
                       className="flex-1 py-1.5 rounded-xl action-pill text-2xs font-display font-semibold
                         text-cyan-700 hover:text-cyan-400 hover:bg-cyan-500/8 transition-all disabled:opacity-20">
                       MAX

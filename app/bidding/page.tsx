@@ -20,6 +20,10 @@ import { getBaanPasswordFromSheet, passwordSessionToken } from '@/lib/passwords'
 
 const DISASTER_IDS = Array.from({ length: 9 }, (_, i) => i + 1)
 
+function sanitizeMoneyInput(value: string) {
+  return value.replace(/[^\d]/g, '')
+}
+
 /* ── Login screen ──────────────────────────────────────────── */
 function BaanLogin({ onLogin }: { onLogin:(b:number)=>void }) {
   const [baan,  setBaan]  = useState('')
@@ -120,8 +124,8 @@ function BiddingGame({ baan }: { baan:number }) {
   const selectedAreaKey = cart.map(i => i.area).join('|')
   const selectedAreas = useMemo(() => selectedAreaKey ? selectedAreaKey.split('|') : [], [selectedAreaKey])
   const kingBidAmount = kingBid?.amount || 0
-  const betSpend = parseFloat(betAmount) || 0
   const betAmountNumber = betAmount.trim() === '' ? NaN : Number(betAmount)
+  const betSpend = Number.isFinite(betAmountNumber) ? betAmountNumber : 0
   const minBetAmount = balance > 0 ? Math.ceil(balance * 0.1) : 0
   const isBetAmountValid = balance > 0 && Number.isFinite(betAmountNumber) && betAmountNumber >= minBetAmount && betAmountNumber <= balance
   const isBetMode = gs.gameMode === 'bet'
@@ -280,10 +284,10 @@ function BiddingGame({ baan }: { baan:number }) {
   /* save — local store + write to Google Sheet */
   const handleSave = useCallback(async ()=>{
     if(!gs.isOpen) return
-    const hasInvalidBidAmount = cart.some(i => i.amount < 100)
+    const hasInvalidBidAmount = cart.some(i => !Number.isFinite(i.amount) || i.amount < 100)
     if(isBetMode && !isBetAmountValid) return
     if(isSelectDisasterPhase && (!canSelectKingDisaster || !kingDis)) return
-    if(!isBetMode && !isSelectDisasterPhase && (hasInvalidBidAmount || totalBet <= 0 || totalBet > effectiveBalance)) return
+    if(!isBetMode && !isSelectDisasterPhase && (hasInvalidBidAmount || !Number.isFinite(totalBet) || totalBet <= 0 || totalBet > effectiveBalance)) return
 
     // 1. Save locally (instant, always works)
     saveSubmission({
@@ -447,9 +451,9 @@ function BiddingGame({ baan }: { baan:number }) {
                       </div>
                       <div>
                         <label className="text-label mb-2 block">Bet amount</label>
-                        <input type="number" value={betAmount} min={minBetAmount} max={balance} step={100} disabled={!gs.isOpen}
+                        <input type="text" inputMode="numeric" pattern="[0-9]*" value={betAmount} disabled={!gs.isOpen}
                           onChange={e=>{
-                            setBetAmount(e.target.value)
+                            setBetAmount(sanitizeMoneyInput(e.target.value))
                             setIsSaved(false)
                           }}
                           onBlur={normalizeBetAmount}
