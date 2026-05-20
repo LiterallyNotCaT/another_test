@@ -719,7 +719,7 @@ function BiddingGame({ baan }: { baan:number }) {
                       readOnly={!canEditBid}
                       kingDisaster={mapKingDisaster}
                       kingDisasterTone={isSelectDisasterPhase && canChooseKingDisaster ? 'selection' : 'result'}
-                      currentKing={currentKing}
+                      currentKing={canSeeCurrentOwnership ? currentKing : null}
                       compact />
                     </>
                   )}

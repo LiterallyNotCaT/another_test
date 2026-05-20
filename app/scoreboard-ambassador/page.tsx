@@ -224,7 +224,7 @@ function AmbassadorContent() {
                     </div>
                     <GameMap ownership={canSeeFullInfo ? sheetOwnership.ownership : {}} filterDisaster={filterDis} readOnly
                       kingDisaster={canSeeFullInfo ? getActiveDisasterForWave(selWave) : null}
-                      currentKing={currentKing}
+                      currentKing={canSeeFullInfo ? currentKing : null}
                       compact />
                     <div className="ambassador-filter-row flex flex-wrap gap-2">
                       {DISASTER_IDS.map(id=>(
