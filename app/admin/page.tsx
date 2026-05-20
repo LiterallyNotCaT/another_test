@@ -14,10 +14,10 @@ import clsx from 'clsx'
 import {
   RefreshCw, ChevronLeft, ChevronRight, Play, Square,
   Zap, Map, History, Trophy,
-  LayoutDashboard, CheckCircle2, Clock, ExternalLink, RotateCcw,
+  LayoutDashboard, CheckCircle2, Clock, RotateCcw,
 } from 'lucide-react'
 import {
-  HOUSE_COLORS, HOUSE_NAMES, SHEET_BASE, TOTAL_WAVES,
+  HOUSE_COLORS, HOUSE_NAMES, TOTAL_WAVES,
   normalizeAmbassadorVisibility, type AmbassadorTabKey,
 } from '@/lib/constants'
 import { AFTERNOON_SCORE_CSV_URL } from '@/lib/scoreboardSources'
@@ -417,9 +417,6 @@ function AdminContent() {
 
             <aside className="admin-control-stack">
               <div className="admin-sheet-row">
-                <a href={SHEET_BASE} target="_blank" rel="noreferrer" className="btn btn-ghost admin-sheet-button">
-                  <ExternalLink size={14} /> Sheet
-                </a>
                 <GroupChat actor="admin" label="Chat" />
               </div>
               <div className="wire-panel wire-panel-green wire-sidebar-fill">
