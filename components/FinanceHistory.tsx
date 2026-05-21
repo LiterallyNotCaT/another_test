@@ -59,24 +59,56 @@ const fetchSheetRows = async (query: string) => {
   return parseGViz(text)
 }
 
+const cellValue = (cell: any) => cell?.v ?? cell?.f ?? ''
+
+const parseBaanList = (value: unknown) => {
+  const seen = new Set<number>()
+  return (String(value ?? '').match(/\d{1,2}/g) ?? [])
+    .map(raw => parseInt(raw, 10))
+    .filter(baan => {
+      if (!Number.isInteger(baan) || baan < 1 || baan > 12 || seen.has(baan)) return false
+      seen.add(baan)
+      return true
+    })
+}
+
+const parseSheetNumber = (value: unknown) => {
+  const parsed = parseFloat(String(value ?? '').replace(/,/g, '').replace('%', ''))
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 const fetchMiniGameRanking = async (wave: number): Promise<MiniGameRank[]> => {
-  const query = `${getWaveSheetQuery(wave)}&range=${encodeURIComponent('B20:D31')}`
+  const query = `${getWaveSheetQuery(wave)}&range=${encodeURIComponent('A20:D31')}`
   const rows = await fetchSheetRows(query)
-  const parsed = Array.from({ length: 12 }, (_, i) => {
-    const baanRaw = rows?.[i]?.c?.[0]?.v
-    const scoreRaw = rows?.[i]?.c?.[1]?.v
-    const rewardRaw = rows?.[i]?.c?.[2]?.v
-    const baan = parseInt(String(baanRaw ?? ''))
-    const score = parseFloat(String(scoreRaw ?? ''))
-    const reward = parseFloat(String(rewardRaw ?? ''))
+  const groupedRows = Array.from({ length: 12 }, (_, i) => {
+    const cells = rows?.[i]?.c ?? []
+    const rank = parseInt(String(cellValue(cells[0]) || i + 1), 10)
+    const baanText = String(cellValue(cells[1]) ?? '')
+    const baans = parseBaanList(baanText)
+    const score = parseSheetNumber(cellValue(cells[2]))
+    const reward = parseSheetNumber(cellValue(cells[3]))
     return {
-      baan: !isNaN(baan) && baan >= 1 && baan <= 12 ? baan : null,
-      score: Number.isFinite(score) ? score : null,
-      reward: Number.isFinite(reward) ? reward : null,
+      rank: Number.isFinite(rank) ? rank : i + 1,
+      baans,
+      score,
+      reward,
     }
   })
-  const rankedRows = parsed
-    .filter((row): row is { baan: number; score: number | null; reward: number | null } => row.baan !== null)
+
+  const expandedRows = groupedRows.flatMap(row =>
+    row.baans.map(baan => ({
+      rank: row.rank,
+      baan,
+      score: row.score,
+      reward: row.reward,
+    }))
+  )
+  const hasGroupedBaanCells = groupedRows.some(row => row.baans.length > 1)
+  if (hasGroupedBaanCells) {
+    return expandedRows.sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99) || (a.baan ?? 99) - (b.baan ?? 99))
+  }
+
+  const rankedRows = expandedRows
     .map(row => ({
       ...row,
       scoreForRank: row.score ?? row.reward ?? Number.NEGATIVE_INFINITY,
@@ -85,12 +117,7 @@ const fetchMiniGameRanking = async (wave: number): Promise<MiniGameRank[]> => {
 
   const ranked = withCompetitionRanks(rankedRows, row => row.scoreForRank)
 
-  return [
-    ...ranked.map(({ scoreForRank: _scoreForRank, ...row }) => row),
-    ...parsed
-      .filter(row => row.baan === null)
-      .map(row => ({ ...row, rank: null })),
-  ]
+  return ranked.map(({ scoreForRank: _scoreForRank, ...row }) => row)
 }
 
 const fetchLadderRanking = async (wave: number): Promise<MiniGameRank[]> => {
@@ -593,9 +620,9 @@ function FinanceHistory({
                 <div className="mini-game-ranking-columns">
                   {rankingColumns.map((column, columnIndex) => (
                     <div key={columnIndex} className="mini-game-ranking-column">
-                      {column.map(row => (
+                      {column.map((row, rowIndex) => (
                         <div
-                          key={`${row.baan ?? 'unknown'}-${row.rank ?? 'blank'}`}
+                          key={`${row.baan ?? 'unknown'}-${row.rank ?? 'blank'}-${columnIndex}-${rowIndex}`}
                           className={clsx(
                             'mini-game-ranking-row',
                             !showRankingRewards && 'is-no-reward',
