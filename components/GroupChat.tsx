@@ -3,13 +3,14 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import { MessageCircle, Send, X } from 'lucide-react'
-import { HOUSE_COLORS, HOUSE_NAMES } from '@/lib/constants'
+import { HOUSE_COLORS, HOUSE_NAMES, normalizeChatPermissions, type ChatPermissions } from '@/lib/constants'
 import {
   fetchGroupChatMessages,
   sendGroupChatMessage,
   type GroupChatActor,
   type GroupChatMessage,
 } from '@/lib/sheets'
+import { getGameState, subscribeStore } from '@/lib/store'
 
 function isSameActor(message: GroupChatMessage, actor: GroupChatActor) {
   return actor === 'admin'
@@ -33,16 +34,38 @@ function targetLabel(target: string) {
   return Number.isInteger(baan) && baan >= 1 && baan <= 12 ? HOUSE_NAMES[baan] : 'Group chat'
 }
 
-function canViewMessage(message: GroupChatMessage, actor: GroupChatActor) {
-  const target = message.sendTo || 'public'
-  if (target === 'public') return true
-  const currentActor = actorTarget(actor)
-  return target === currentActor || senderTarget(message) === currentActor
+function isHouseTarget(target: string) {
+  const baan = Number(target)
+  return Number.isInteger(baan) && baan >= 1 && baan <= 12
 }
 
-function chatTargetOptions(actor: GroupChatActor, includeAll = false) {
+function canUseChatTarget(target: string, actor: GroupChatActor, permissions: ChatPermissions) {
+  if (target === 'all') return true
+  if (actor === 'admin') {
+    if (target === 'public') return permissions.groupChat
+    return isHouseTarget(target)
+  }
+  if (target === 'public') return permissions.groupChat
+  if (target === 'admin') return permissions.adminPrivate
+  if (isHouseTarget(target)) return permissions.playerPrivate && target !== actorTarget(actor)
+  return false
+}
+
+function canViewMessage(message: GroupChatMessage, actor: GroupChatActor, permissions: ChatPermissions) {
+  if (actor === 'admin') return true
+  const target = message.sendTo || 'public'
+  if (target === 'public') return permissions.groupChat
+  const currentActor = actorTarget(actor)
+  const sender = senderTarget(message)
+  const involved = target === currentActor || sender === currentActor
+  if (!involved) return false
+  const withAdmin = target === 'admin' || sender === 'admin'
+  return withAdmin ? permissions.adminPrivate : permissions.playerPrivate
+}
+
+function chatTargetOptions(actor: GroupChatActor, permissions: ChatPermissions, includeAll = false) {
   const self = actorTarget(actor)
-  return [
+  const options = [
     ...(includeAll ? [{ value: 'all', label: 'All' }] : []),
     { value: 'public', label: 'Group chat' },
     ...(self === 'admin' ? [] : [{ value: 'admin', label: 'Admin' }]),
@@ -50,10 +73,11 @@ function chatTargetOptions(actor: GroupChatActor, includeAll = false) {
       .filter(baan => String(baan) !== self)
       .map(baan => ({ value: String(baan), label: HOUSE_NAMES[baan] })),
   ]
+  return options.filter(option => canUseChatTarget(option.value, actor, permissions))
 }
 
-function sendOptionsForChannel(actor: GroupChatActor, channelFilter: string) {
-  const options = chatTargetOptions(actor)
+function sendOptionsForChannel(actor: GroupChatActor, channelFilter: string, permissions: ChatPermissions) {
+  const options = chatTargetOptions(actor, permissions)
   if (channelFilter === 'all' || channelFilter === 'public') return options
   return options.filter(option => option.value === channelFilter)
 }
@@ -68,8 +92,8 @@ function messageChannelForActor(message: GroupChatMessage, actor: GroupChatActor
   return target
 }
 
-function canSendToTarget(target: string, actor: GroupChatActor) {
-  return target === 'public' || target !== actorTarget(actor)
+function canSendToTarget(target: string, actor: GroupChatActor, permissions: ChatPermissions) {
+  return target !== actorTarget(actor) && canUseChatTarget(target, actor, permissions)
 }
 
 function privateReplyTarget(message: GroupChatMessage, actor: GroupChatActor) {
@@ -119,14 +143,15 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
   const [sending, setSending] = useState(false)
   const [unread, setUnread] = useState(false)
   const [error, setError] = useState('')
+  const [chatPermissions, setChatPermissions] = useState(() => normalizeChatPermissions(getGameState().chatPermissions))
   const seenLatestRef = useRef('')
   const initializedRef = useRef(false)
   const listRef = useRef<HTMLDivElement | null>(null)
-  const channelOptions = useMemo(() => chatTargetOptions(actor, true), [actor])
-  const sendTargetOptions = useMemo(() => sendOptionsForChannel(actor, channelFilter), [actor, channelFilter])
+  const channelOptions = useMemo(() => chatTargetOptions(actor, chatPermissions, true), [actor, chatPermissions])
+  const sendTargetOptions = useMemo(() => sendOptionsForChannel(actor, channelFilter, chatPermissions), [actor, channelFilter, chatPermissions])
   const viewableMessages = useMemo(
-    () => messages.filter(message => canViewMessage(message, actor)),
-    [actor, messages]
+    () => messages.filter(message => canViewMessage(message, actor, chatPermissions)),
+    [actor, chatPermissions, messages]
   )
   const visibleMessages = useMemo(
     () => viewableMessages.filter(message => channelFilter === 'all' || messageChannelForActor(message, actor) === channelFilter),
@@ -145,13 +170,21 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
   )
 
   useEffect(() => {
+    const update = () => setChatPermissions(normalizeChatPermissions(getGameState().chatPermissions))
+    update()
+    return subscribeStore(update)
+  }, [])
+
+  useEffect(() => {
     if (lockedReplyTarget) return
-    if (!sendTargetOptions.some(option => option.value === sendTo)) setSendTo('public')
+    if (!sendTargetOptions.some(option => option.value === sendTo)) setSendTo(sendTargetOptions[0]?.value ?? '')
   }, [lockedReplyTarget, sendTargetOptions, sendTo])
 
   useEffect(() => {
-    if (channelFilter !== 'all' && channelFilter !== 'public') setSendTo(channelFilter)
-  }, [channelFilter])
+    if (channelFilter !== 'all' && channelFilter !== 'public' && sendTargetOptions.some(option => option.value === channelFilter)) {
+      setSendTo(channelFilter)
+    }
+  }, [channelFilter, sendTargetOptions])
 
   useEffect(() => {
     if (!channelOptions.some(option => option.value === channelFilter)) setChannelFilter('all')
@@ -160,7 +193,7 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
   const refresh = useCallback(async () => {
     try {
       const next = await fetchGroupChatMessages()
-      const viewableNext = next.filter(message => canViewMessage(message, actor))
+      const viewableNext = next.filter(message => canViewMessage(message, actor, chatPermissions))
       const latestId = viewableNext.at(-1)?.id ?? ''
       setMessages(next)
       setError('')
@@ -178,7 +211,7 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
       console.error(e)
       setError('Cannot load chat')
     }
-  }, [actor, open])
+  }, [actor, chatPermissions, open])
 
   useEffect(() => {
     refresh()
@@ -210,11 +243,16 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
     e.preventDefault()
     const message = draft.trim()
     if (!message || sending) return
+    const target = lockedReplyTarget || sendTo
+    if (!canSendToTarget(target, actor, chatPermissions)) {
+      setError('This chat channel is disabled by admin')
+      return
+    }
     setSending(true)
     setDraft('')
     const now = Date.now()
     const time = optimisticChatTime()
-    const effectiveSendTo = canSendToTarget(lockedReplyTarget || sendTo, actor) ? lockedReplyTarget || sendTo : 'public'
+    const effectiveSendTo = target
     setMessages(prev => [...prev, {
       id: `local-${now}`,
       row: -now,
@@ -322,7 +360,10 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
               <div className="group-chat-compose-tools">
                 <label className="group-chat-target">
                   <span>To</span>
-                  <select value={sendTo} onChange={e => setSendTo(e.target.value)} disabled={Boolean(lockedReplyTarget)}>
+                <select value={sendTo} onChange={e => setSendTo(e.target.value)} disabled={Boolean(lockedReplyTarget) || !composeTargetOptions.length}>
+                    {!composeTargetOptions.length && (
+                      <option value="">No channels</option>
+                    )}
                     {composeTargetOptions.map(option => (
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
@@ -345,7 +386,7 @@ export default function GroupChat({ actor, label }: { actor: GroupChatActor; lab
                   placeholder="Type a message"
                   className="group-chat-input"
                 />
-                <button type="submit" disabled={!draft.trim() || sending} className="group-chat-send" aria-label="Send message">
+                <button type="submit" disabled={!draft.trim() || sending || !composeTargetOptions.length} className="group-chat-send" aria-label="Send message">
                   <Send size={18} />
                 </button>
               </div>

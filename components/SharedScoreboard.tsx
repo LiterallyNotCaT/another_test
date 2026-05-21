@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Medal, Crown, RefreshCw, Clock } from 'lucide-react';
+import { withCompetitionRanks } from '@/lib/ranking';
 
 // --- 1. PROPS DEFINITION: The customizable settings for this component ---
 type SharedScoreboardProps = {
@@ -161,7 +162,10 @@ export default function SharedScoreboard({
     };
   }, [fetchData]);
 
-  const sortedHouses = [...houses].sort((a, b) => b.totalScore - a.totalScore);
+  const sortedHouses = withCompetitionRanks(
+    [...houses].sort((a, b) => b.totalScore - a.totalScore),
+    house => house.totalScore,
+  );
   const displayHouses = mode === 'embedded'
     ? [
         ...sortedHouses.slice(0, 6),
@@ -206,10 +210,10 @@ export default function SharedScoreboard({
       <div className="w-full max-w-[1400px] flex-1 min-h-0 pb-3 px-3">
         <ul className={`shared-scoreboard-grid grid grid-cols-1 grid-flow-row gap-x-8 gap-y-4 h-full content-start ${mode === 'fullscreen' ? 'lg:grid-rows-6 lg:grid-flow-col' : ''}`}>
           <AnimatePresence>
-            {displayHouses.map((house, index) => {
-              const isTop1 = index === 0;
-              const isTop2 = index === 1;
-              const isTop3 = index === 2;
+            {displayHouses.map((house) => {
+              const isTop1 = house.rank === 1;
+              const isTop2 = house.rank === 2;
+              const isTop3 = house.rank === 3;
 
               return (
                 <motion.li
@@ -232,7 +236,7 @@ export default function SharedScoreboard({
                       {isTop1 ? <Crown className="w-6 h-6 lg:w-7 lg:h-7 text-yellow-500" /> :
                        isTop2 ? <Medal className="w-6 h-6 lg:w-7 lg:h-7 text-slate-500" /> :
                        isTop3 ? <Medal className="w-6 h-6 lg:w-7 lg:h-7 text-amber-600" /> :
-                       <span className="text-gray-500">{index + 1}</span>}
+                       <span className="text-gray-500">{house.rank}</span>}
                     </div>
 
                     <div className="flex flex-col min-w-0">

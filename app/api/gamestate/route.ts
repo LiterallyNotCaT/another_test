@@ -2,7 +2,13 @@ import { createConnection, type Socket } from 'node:net'
 import { connect, type TLSSocket } from 'node:tls'
 import { createClient } from '@vercel/kv'
 import { NextResponse } from 'next/server'
-import { DEFAULT_AMBASSADOR_VISIBILITY, normalizeAmbassadorVisibility, type GameState } from '@/lib/constants'
+import {
+  DEFAULT_AMBASSADOR_VISIBILITY,
+  DEFAULT_CHAT_PERMISSIONS,
+  normalizeAmbassadorVisibility,
+  normalizeChatPermissions,
+  type GameState,
+} from '@/lib/constants'
 
 export const runtime = 'nodejs'
 
@@ -20,6 +26,7 @@ const defaultState: GameState = {
   gamePhase: 'play',
   showResults: false,
   ambassadorVisibility: DEFAULT_AMBASSADOR_VISIBILITY,
+  chatPermissions: DEFAULT_CHAT_PERMISSIONS,
 }
 
 function normalizeGameState(value: unknown): GameState {
@@ -40,6 +47,7 @@ function normalizeGameState(value: unknown): GameState {
     gamePhase: gameMode === 'bet' ? 'play' : gamePhase,
     showResults: state.showResults === true,
     ambassadorVisibility: normalizeAmbassadorVisibility(state.ambassadorVisibility),
+    chatPermissions: normalizeChatPermissions(state.chatPermissions),
     updatedAt: typeof state.updatedAt === 'string' ? state.updatedAt : undefined,
   }
 }

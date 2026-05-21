@@ -19,6 +19,7 @@ import {
 import {
   HOUSE_COLORS, HOUSE_NAMES, TOTAL_WAVES,
   normalizeAmbassadorVisibility, type AmbassadorTabKey,
+  normalizeChatPermissions, type ChatPermissions,
 } from '@/lib/constants'
 import { AFTERNOON_SCORE_CSV_URL } from '@/lib/scoreboardSources'
 import { fetchWaveInputs, type WaveInputRow } from '@/lib/sheets'
@@ -38,6 +39,11 @@ const AMBASSADOR_TAB_CONTROLS: Array<{ key: AmbassadorTabKey; label: string }> =
   { key: 'history', label: 'Finance history' },
   { key: 'lieHistory', label: 'Lie history' },
 ]
+const CHAT_PERMISSION_CONTROLS: Array<{ key: keyof ChatPermissions; label: string; detail: string }> = [
+  { key: 'adminPrivate', label: 'Admin private', detail: 'Players can DM admin' },
+  { key: 'groupChat', label: 'Group chat', detail: 'Players can use public chat' },
+  { key: 'playerPrivate', label: 'Player private', detail: 'Players can DM each other' },
+]
 
 function submissionKey(wave: number, baan: number) {
   return `${wave}:${baan}`
@@ -54,6 +60,7 @@ function AdminContent() {
   if (initialRevisionMap.current === null) initialRevisionMap.current = getSubmissionRevisionMap()
   const [gs,          setGS]          = useState(getGameState())
   const [tab,         setTab]         = useState<'dashboard'|'map'|'history'|'ownership'|'lieHistory'|'leaderboard'>('dashboard')
+  const [controlTab,  setControlTab]  = useState<'games'|'etc'>('games')
   const [mapWave,     setMapWave]     = useState(getGameState().currentWave)
   const [submissionWave, setSubmissionWave] = useState(getGameState().currentWave)
   const [submissionGame, setSubmissionGame] = useState<'bid'|'bet'>(getGameState().gameMode === 'bet' ? 'bet' : 'bid')
@@ -222,8 +229,12 @@ function AdminContent() {
   const localSubmissionsCurrent = getSubmissionsForWave(submissionWave)
   const viewedWaveMeta = waveMeta[submissionWave] ?? { king: null, disaster: null }
   const ambassadorVisibility = normalizeAmbassadorVisibility(gs.ambassadorVisibility)
+  const chatPermissions = normalizeChatPermissions(gs.chatPermissions)
   const setAmbassadorVisibility = (patch: Parameters<typeof normalizeAmbassadorVisibility>[0]) => {
     applyGS({ ambassadorVisibility: normalizeAmbassadorVisibility(patch) })
+  }
+  const setChatPermissions = (patch: Parameters<typeof normalizeChatPermissions>[0]) => {
+    applyGS({ chatPermissions: normalizeChatPermissions(patch) })
   }
   const toggleAmbassadorTab = (key: AmbassadorTabKey) => {
     setAmbassadorVisibility({
@@ -249,15 +260,18 @@ function AdminContent() {
           <HomeButton className="bg-white/10 border-white/20 text-white hover:text-white" />
           <div className="wire-title">ADMIN</div>
         </div>
-        <div className="wire-time">
-          <Timer endTime={gs.timerEnd} isOpen={gs.isOpen} compact />
+        <div className="wire-topbar-actions">
+          <GroupChat actor="admin" label="Chat" />
+          <div className="wire-time">
+            <Timer endTime={gs.timerEnd} isOpen={gs.isOpen} compact />
+          </div>
         </div>
       </header>
 
       <main className="wire-scroll">
         <div className="wire-content">
           {toast && (
-            <div className={clsx('fixed right-5 top-24 z-50 rounded px-4 py-3 text-sm text-white shadow-lg', toastStyle)}>
+            <div className={clsx('fixed right-5 top-20 z-50 rounded px-4 py-3 text-sm text-white shadow-lg', toastStyle)}>
               {toast.msg}
             </div>
           )}
@@ -416,9 +430,6 @@ function AdminContent() {
             </div>
 
             <aside className="admin-control-stack">
-              <div className="admin-sheet-row">
-                <GroupChat actor="admin" label="Chat" />
-              </div>
               <div className="wire-panel wire-panel-green wire-sidebar-fill">
               <div className="admin-control-panel w-full space-y-4">
                 <div className={clsx('admin-status-corner badge', gs.isOpen?'badge-green':'badge-red')}>
@@ -426,6 +437,18 @@ function AdminContent() {
                   {gs.isOpen?'OPEN':'CLOSED'}
                 </div>
                 <div className="admin-control-title">Admin Control</div>
+                <div className="admin-control-tabs">
+                  <button type="button" onClick={() => setControlTab('games')}
+                    className={clsx('btn', controlTab === 'games' ? 'btn-primary' : 'btn-ghost')}>
+                    Games
+                  </button>
+                  <button type="button" onClick={() => setControlTab('etc')}
+                    className={clsx('btn', controlTab === 'etc' ? 'btn-primary' : 'btn-ghost')}>
+                    Etc.
+                  </button>
+                </div>
+                {controlTab === 'games' ? (
+                  <>
                 <div className="grid grid-cols-2 gap-2">
                   <button onClick={selectBidMode}
                     className={clsx('btn', gs.gameMode !== 'bet' && gs.gamePhase !== 'select-disaster' ? 'btn-primary' : 'btn-ghost')}>
@@ -437,9 +460,12 @@ function AdminContent() {
                   </button>
                 </div>
                 {gs.gameMode === 'bid' && (
-                  <div className={clsx('badge w-full justify-center', gs.gamePhase === 'select-disaster' ? 'badge-gold' : 'badge-blue')}>
-                    {gs.gamePhase === 'select-disaster' ? 'Select disaster - king only' : 'Bid phase - all houses'}
-                  </div>
+                  <button
+                    onClick={startDisasterSelect}
+                    className={clsx('btn admin-select-disaster-button', gs.gamePhase === 'select-disaster' ? 'btn-success' : 'btn-ghost')}
+                  >
+                    Select disaster (king only, 3 min)
+                  </button>
                 )}
                 <div className="wire-panel admin-wave-card colorful-box colorful-box-sky bg-white p-4">
                   <div className="mb-4 grid grid-cols-[44px_minmax(0,1fr)_44px] items-center gap-2">
@@ -460,14 +486,6 @@ function AdminContent() {
                     <button onClick={()=>addTime(5)} className="btn btn-ghost">+5s</button>
                     <button onClick={()=>addTime(60)} className="btn btn-ghost">+1 min</button>
                   </div>
-                  {gs.gameMode === 'bid' && (
-                    <button
-                      onClick={startDisasterSelect}
-                      className={clsx('btn mt-3 w-full', gs.gamePhase === 'select-disaster' ? 'btn-success' : 'btn-ghost')}
-                    >
-                      Select disaster (king only, 3 min)
-                    </button>
-                  )}
                   <button
                     onClick={() => {
                       applyGS({ showResults: !gs.showResults })
@@ -478,6 +496,12 @@ function AdminContent() {
                     {gs.showResults ? 'Hide result' : 'Show result'}
                   </button>
                 </div>
+                <button onClick={processWave} disabled={processing} className="btn btn-primary w-full">
+                  <Zap size={15}/> Refresh Sheet Wave {gs.currentWave}
+                </button>
+                  </>
+                ) : (
+                  <>
                 <div className="wire-panel admin-ambassador-visibility-card bg-white p-3">
                   <div className="mb-2">
                     <div className="font-display text-sm font-bold text-slate-800">Ambassador visibility</div>
@@ -504,9 +528,29 @@ function AdminContent() {
                     </button>
                   </div>
                 </div>
-                <button onClick={processWave} disabled={processing} className="btn btn-primary w-full">
-                  <Zap size={15}/> Refresh Sheet Wave {gs.currentWave}
-                </button>
+                <div className="wire-panel admin-chat-permissions-card bg-white p-3">
+                  <div className="mb-2">
+                    <div className="font-display text-sm font-bold text-slate-800">Chat permissions</div>
+                    <div className="text-2xs font-semibold text-slate-500">Control what player chat channels are available.</div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2">
+                    {CHAT_PERMISSION_CONTROLS.map(item => (
+                      <button
+                        key={item.key}
+                        onClick={() => setChatPermissions({
+                          ...chatPermissions,
+                          [item.key]: !chatPermissions[item.key],
+                        })}
+                        className={clsx('btn admin-chat-permission-button px-2 text-xs', chatPermissions[item.key] ? 'btn-success' : 'btn-ghost')}
+                      >
+                        <span>{chatPermissions[item.key] ? 'Allow' : 'Block'} {item.label}</span>
+                        <small>{item.detail}</small>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                  </>
+                )}
               </div>
               </div>
             </aside>

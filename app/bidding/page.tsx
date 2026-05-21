@@ -9,7 +9,7 @@ import GroupChat from '@/components/GroupChat'
 import { useWaveOwnership } from '@/components/OwnershipHistory'
 import Timer from '@/components/Timer'
 import clsx from 'clsx'
-import { LogOut, Sparkles } from 'lucide-react'
+import { Landmark, LogOut, Sparkles } from 'lucide-react'
 import { HOUSE_NAMES, SHEET_ID, getWaveSheetQuery } from '@/lib/constants'
 import {
   getGameState, saveSubmission, getSubmissionsForBaan,
@@ -93,6 +93,98 @@ function BaanLogin({ onLogin }: { onLogin:(b:number)=>void }) {
 }
 
 /* ── Game screen ───────────────────────────────────────────── */
+function BaanLoginV2({ onLogin }: { onLogin:(b:number)=>void }) {
+  const [baan, setBaan] = useState('')
+  const [pass, setPass] = useState('')
+  const [err, setErr] = useState('')
+  const [shake, setShake] = useState(false)
+  const [checkingPassword, setCheckingPassword] = useState(false)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const b = parseInt(baan)
+    if (isNaN(b) || b < 1 || b > 12) {
+      setErr('กรอกเลขบ้าน 1-12 เท่านั้น')
+      return
+    }
+    setCheckingPassword(true)
+    const expectedPassword = await getBaanPasswordFromSheet(b, true).catch(error => {
+      console.error(error)
+      return ''
+    })
+    setCheckingPassword(false)
+    if (!expectedPassword || pass !== expectedPassword) {
+      setErr('รหัสผ่านไม่ถูกต้อง')
+      setShake(true)
+      setTimeout(() => setShake(false), 500)
+      return
+    }
+    sessionStorage.setItem('baan_login', String(b))
+    sessionStorage.setItem('baan_login_token', await passwordSessionToken(`baan:${b}`, expectedPassword))
+    onLogin(b)
+  }
+
+  return (
+    <div className="auth-page min-h-screen app-shell flex items-center justify-center px-4 py-6">
+      <div className="pointer-events-none fixed inset-0">
+        <div className="absolute top-1/3 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-violet-600/10 blur-[100px]" />
+      </div>
+
+      <div className={clsx('auth-card auth-card-baan relative z-10 w-full', shake && 'animate-[shake_0.4s_ease-in-out]')}>
+        <div className="auth-icon mx-auto flex items-center justify-center rounded-2xl border bg-white">
+          <Landmark size={24} />
+        </div>
+
+        <div className="auth-heading text-center">
+          <h1 className="font-display font-black text-slate-950">เข้าสู่ระบบ</h1>
+          <p className="font-semibold text-slate-500">เกมลงทุนพื้นที่ · ช่วงบ่าย</p>
+        </div>
+
+        <form onSubmit={submit} className="auth-form">
+          <div className="auth-field">
+            <label className="auth-label">เลขบ้าน (1-12)</label>
+            <input
+              type="number"
+              min={1}
+              max={12}
+              value={baan}
+              onChange={e => setBaan(e.target.value)}
+              placeholder="กรอกเลขบ้าน"
+              autoFocus
+              className="input-base auth-input text-center text-lg"
+            />
+          </div>
+
+          <div className="auth-field">
+            <label className="auth-label">รหัสผ่าน</label>
+            <input
+              type="password"
+              value={pass}
+              onChange={e => setPass(e.target.value)}
+              placeholder="รหัสผ่าน"
+              className="input-base auth-input text-center"
+            />
+          </div>
+
+          {err && <p className="auth-error text-center text-xs font-bold text-red-500">{err}</p>}
+
+          <button
+            type="submit"
+            disabled={checkingPassword}
+            className="btn auth-submit w-full"
+            style={{ background: 'linear-gradient(135deg,#7c3aed,#a78bfa)', boxShadow: '0 16px 34px rgba(124,58,237,0.28)' }}
+          >
+            {checkingPassword ? 'กำลังตรวจสอบ...' : 'เข้าสู่เกม'}
+          </button>
+        </form>
+
+        <div className="auth-home"><HomeButton /></div>
+      </div>
+      <style>{`@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}`}</style>
+    </div>
+  )
+}
+
 interface CartItem { area:string; amount:number }
 type GoogleSheetCell = { v?: string | number | null } | null
 type GoogleSheetRow = { c?: GoogleSheetCell[] }
@@ -812,5 +904,5 @@ export default function BiddingPage() {
       <div className="w-8 h-8 border-2 border-cyan-300 border-t-transparent rounded-full animate-spin shadow-[0_0_26px_rgba(34,211,238,0.55)]" />
     </div>
   )
-  return baan ? <BiddingGame baan={baan} /> : <BaanLogin onLogin={setBaan} />
+  return baan ? <BiddingGame baan={baan} /> : <BaanLoginV2 onLogin={setBaan} />
 }

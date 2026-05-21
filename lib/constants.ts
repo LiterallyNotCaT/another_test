@@ -100,6 +100,7 @@ export interface GameState {
   gamePhase?: 'play' | 'select-disaster'
   showResults?: boolean
   ambassadorVisibility?: AmbassadorVisibility
+  chatPermissions?: ChatPermissions
   updatedAt?: string
 }
 
@@ -108,6 +109,12 @@ export type AmbassadorTabKey = 'map' | 'history' | 'ownership' | 'lieHistory' | 
 export interface AmbassadorVisibility {
   tabs: Record<AmbassadorTabKey, boolean>
   scoreboardNumbers: boolean
+}
+
+export interface ChatPermissions {
+  groupChat: boolean
+  adminPrivate: boolean
+  playerPrivate: boolean
 }
 
 export const DEFAULT_AMBASSADOR_VISIBILITY: AmbassadorVisibility = {
@@ -119,6 +126,12 @@ export const DEFAULT_AMBASSADOR_VISIBILITY: AmbassadorVisibility = {
     scoreboard: true,
   },
   scoreboardNumbers: true,
+}
+
+export const DEFAULT_CHAT_PERMISSIONS: ChatPermissions = {
+  groupChat: true,
+  adminPrivate: true,
+  playerPrivate: true,
 }
 
 export function normalizeAmbassadorVisibility(value?: Partial<AmbassadorVisibility> | null): AmbassadorVisibility {
@@ -134,6 +147,14 @@ export function normalizeAmbassadorVisibility(value?: Partial<AmbassadorVisibili
     scoreboardNumbers: value?.scoreboardNumbers === undefined
       ? DEFAULT_AMBASSADOR_VISIBILITY.scoreboardNumbers
       : value.scoreboardNumbers === true,
+  }
+}
+
+export function normalizeChatPermissions(value?: Partial<ChatPermissions> | null): ChatPermissions {
+  return {
+    groupChat: value?.groupChat === undefined ? DEFAULT_CHAT_PERMISSIONS.groupChat : value.groupChat === true,
+    adminPrivate: value?.adminPrivate === undefined ? DEFAULT_CHAT_PERMISSIONS.adminPrivate : value.adminPrivate === true,
+    playerPrivate: value?.playerPrivate === undefined ? DEFAULT_CHAT_PERMISSIONS.playerPrivate : value.playerPrivate === true,
   }
 }
 

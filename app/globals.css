@@ -1456,6 +1456,26 @@ body {
   background: rgba(255,255,255,0.22) !important;
   border-color: rgba(255,255,255,0.55) !important;
 }
+.wire-topbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+}
+.wire-topbar .group-chat-trigger {
+  width: auto !important;
+  min-height: 34px !important;
+  padding: 7px 11px !important;
+  border-color: rgba(255,255,255,0.36) !important;
+  background: rgba(255,255,255,0.14) !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+.wire-topbar .group-chat-trigger svg,
+.wire-topbar .group-chat-trigger span {
+  color: #fff !important;
+}
 .wire-page .badge-green,
 .wire-page-full .badge-green {
   background: #e8f7ef;
@@ -2211,37 +2231,103 @@ form .btn.w-full {
 .main-nav-grid .content-card .mt-6 { margin-top: 18px; }
 
 .auth-page {
-  padding: clamp(28px, 6vh, 76px) clamp(18px, 5vw, 72px) !important;
+  padding: clamp(28px, 7vh, 80px) clamp(18px, 5vw, 72px) !important;
   background:
+    radial-gradient(circle at 50% 30%, rgba(255,255,255,0.82), transparent 34rem),
     linear-gradient(135deg, rgba(219,234,254,0.95), rgba(245,243,255,0.95) 46%, rgba(236,253,245,0.95)),
     #eef4ff !important;
 }
 .auth-card {
-  max-width: min(92vw, 30rem) !important;
+  max-width: min(94vw, 28.5rem) !important;
   border: 1px solid rgba(148,163,184,0.28) !important;
-  border-radius: 22px !important;
-  background: rgba(255,255,255,0.92) !important;
-  padding: clamp(26px, 4vw, 38px) !important;
-  box-shadow: 0 24px 70px rgba(30,41,59,0.16) !important;
+  border-radius: 20px !important;
+  background: rgba(255,255,255,0.96) !important;
+  padding: clamp(24px, 4vw, 34px) !important;
+  box-shadow: 0 22px 64px rgba(30,41,59,0.16) !important;
+  color: #172033;
+}
+.auth-icon {
+  width: 56px;
+  height: 56px;
+  margin-bottom: 18px;
+  color: #334155;
+}
+.auth-heading {
+  margin-bottom: 22px;
+}
+.auth-heading h1 {
+  margin: 0;
+  color: #0f172a !important;
+  font-size: clamp(1.55rem, 5.8vw, 2rem);
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+.auth-heading p {
+  margin-top: 7px;
+  color: #64748b !important;
+  font-size: clamp(0.9rem, 3vw, 1rem);
+  line-height: 1.35;
+}
+.auth-form {
+  display: grid;
+  gap: 14px;
+}
+.auth-field {
+  display: grid;
+  gap: 6px;
+}
+.auth-label {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  line-height: 1.1;
 }
 .auth-card .input-base {
-  margin-block: 8px 10px;
-  min-height: 52px;
+  min-height: 54px;
   border-radius: 14px;
-  font-size: 1rem;
-  background: #f8fafc;
+  border-color: #cbd8ea;
+  background: #fbfdff;
+  color: #172033;
+  font-size: 1.02rem;
+  font-weight: 750;
+  letter-spacing: 0;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.72);
+}
+.auth-card .input-base::placeholder {
+  color: #8a96a8;
+  font-weight: 700;
+}
+.auth-card .input-base:focus {
+  border-color: #7aa7ff;
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(59,130,246,0.12);
+}
+.auth-card input[type='number']::-webkit-outer-spin-button,
+.auth-card input[type='number']::-webkit-inner-spin-button {
+  margin: 0;
+}
+.auth-card input[type='number'] {
+  appearance: textfield;
 }
 .auth-card .btn {
-  min-height: 52px;
+  min-height: 54px;
   border-radius: 14px;
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 900;
+  letter-spacing: 0;
 }
-.auth-card h1 {
-  color: #0f172a !important;
+.auth-submit {
+  margin-top: 2px;
 }
-.auth-card p {
-  color: #64748b !important;
+.auth-error {
+  margin-block: -2px 0;
+  line-height: 1.25;
+}
+.auth-home {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
 }
 .home-button {
   min-height: 36px;
@@ -2422,6 +2508,40 @@ form .btn.w-full {
   line-height: 1.2;
   color: #172033;
   text-transform: uppercase;
+}
+.admin-control-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.admin-select-disaster-button {
+  border-color: #bbf7d0 !important;
+  background: #ecfdf5 !important;
+  color: #047857 !important;
+  font-weight: 900 !important;
+}
+.admin-select-disaster-button.btn-success {
+  background: #15803d !important;
+  border-color: #15803d !important;
+  color: #fff !important;
+}
+.admin-chat-permissions-card,
+.admin-ambassador-visibility-card {
+  border-color: #d7e3f4;
+}
+.admin-chat-permission-button {
+  min-height: 46px !important;
+  align-items: flex-start !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+  text-align: left !important;
+}
+.admin-chat-permission-button small {
+  display: block;
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1.1;
+  opacity: 0.72;
 }
 .admin-status-corner {
   position: absolute;

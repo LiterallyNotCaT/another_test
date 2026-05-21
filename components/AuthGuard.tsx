@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Lock } from 'lucide-react'
+import HomeButton from './HomeButton'
 import { getPagePassword, passwordSessionToken } from '@/lib/passwords'
 
 interface AuthGuardProps {
@@ -74,51 +75,53 @@ export default function AuthGuard({
       </div>
 
       <div
-        className={`auth-card relative z-10 w-full max-w-[22rem] content-card compact-auth-card p-5 sm:p-6
-          transition-all duration-150 ${shake ? 'animate-[shake_0.4s_ease-in-out]' : ''}`}
+        className={`auth-card relative z-10 w-full transition-all duration-150 ${shake ? 'animate-[shake_0.4s_ease-in-out]' : ''}`}
         style={{ borderColor: error ? 'rgba(239,68,68,0.42)' : undefined }}
       >
         <div
-          className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border bg-white"
+          className="auth-icon mx-auto flex items-center justify-center rounded-2xl border bg-white"
           style={{ borderColor: accentColor + '40', boxShadow: `0 14px 34px ${accentColor}2f` }}
         >
-          <Lock size={20} style={{ color: accentColor }} />
+          <Lock size={22} style={{ color: accentColor }} />
         </div>
 
-        <div className="mb-6 text-center">
-          <h1 className="font-display mb-1.5 text-2xl font-black text-slate-950">{title}</h1>
-          <p className="text-sm font-semibold text-slate-500">{subtitle}</p>
+        <div className="auth-heading text-center">
+          <h1 className="font-display font-black text-slate-950">{title}</h1>
+          <p className="font-semibold text-slate-500">{subtitle}</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form onSubmit={handleSubmit} className="auth-form">
           <input
             type="password"
             value={input}
             onChange={e => setInput(e.target.value)}
             placeholder="รหัสผ่าน"
             autoFocus
-            className={`input-base text-center font-mono text-base tracking-[0.25em]
-              ${error ? 'border-red-500/50 bg-red-50 text-red-500' : ''}`}
+            className={`input-base auth-input text-center text-base ${error ? 'border-red-500/50 bg-red-50 text-red-500' : ''}`}
           />
 
           {error && (
-            <p className="flex items-center justify-center gap-1.5 text-center text-xs font-bold text-red-500">
-              <span>!</span> รหัสไม่ถูกต้อง กรุณาลองใหม่
+            <p className="auth-error flex items-center justify-center gap-1.5 text-center text-xs font-bold text-red-500">
+              <span>!</span> รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่
             </p>
           )}
 
           <button
             type="submit"
             disabled={!passwordReady}
-            className="btn btn-primary w-full"
+            className="btn btn-primary auth-submit w-full"
             style={{
               background: `linear-gradient(135deg, ${accentColor}, ${accentColor}cc)`,
               boxShadow: `0 14px 30px ${accentColor}30`,
             }}
           >
-            {passwordReady ? 'เข้าสู่ระบบ' : 'Password sheet unavailable'}
+            {passwordReady ? 'เข้าสู่ระบบ' : 'ไม่พบรหัสผ่าน'}
           </button>
         </form>
+
+        <div className="auth-home">
+          <HomeButton />
+        </div>
       </div>
 
       <style>{`

@@ -2,7 +2,15 @@
 // ============================================================
 // CLIENT-SIDE GAME STATE  (localStorage + BroadcastChannel)
 // ============================================================
-import { GameState, SHEET_ID, WaveSubmission, DEFAULT_AMBASSADOR_VISIBILITY, normalizeAmbassadorVisibility } from './constants'
+import {
+  GameState,
+  SHEET_ID,
+  WaveSubmission,
+  DEFAULT_AMBASSADOR_VISIBILITY,
+  DEFAULT_CHAT_PERMISSIONS,
+  normalizeAmbassadorVisibility,
+  normalizeChatPermissions,
+} from './constants'
 
 const KEY_GAME_STATE    = 'biggame_state'
 const KEY_SUBMISSIONS   = 'biggame_submissions'
@@ -47,10 +55,17 @@ export const defaultGameState: GameState = {
   gamePhase: 'play',
   showResults: false,
   ambassadorVisibility: DEFAULT_AMBASSADOR_VISIBILITY,
+  chatPermissions: DEFAULT_CHAT_PERMISSIONS,
 }
 
 export function getGameState(): GameState {
-  return { ...defaultGameState, ...read<Partial<GameState>>(KEY_GAME_STATE, {}) }
+  const state = read<Partial<GameState>>(KEY_GAME_STATE, {})
+  return {
+    ...defaultGameState,
+    ...state,
+    ambassadorVisibility: normalizeAmbassadorVisibility(state.ambassadorVisibility),
+    chatPermissions: normalizeChatPermissions(state.chatPermissions),
+  }
 }
 export function setGameState(patch: Partial<GameState>, options: { sync?: boolean } = {}) {
   const next = { ...getGameState(), ...patch, updatedAt: new Date().toISOString() }
@@ -112,6 +127,9 @@ export async function fetchGameStateFromSheet(): Promise<GameState | null> {
       showResults: values.get('showResults') === 'true',
       ambassadorVisibility: normalizeAmbassadorVisibility(
         values.get('ambassadorVisibility') ? JSON.parse(values.get('ambassadorVisibility') || '{}') : undefined,
+      ),
+      chatPermissions: normalizeChatPermissions(
+        values.get('chatPermissions') ? JSON.parse(values.get('chatPermissions') || '{}') : undefined,
       ),
       updatedAt,
     }

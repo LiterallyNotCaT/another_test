@@ -4,6 +4,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import clsx from 'clsx'
 import HistoryPanel from './HistoryPanel'
 import { DISASTER_AREAS, HOUSE_NAMES, SHEET_ID, TOTAL_WAVES, getWaveSheetQuery } from '@/lib/constants'
+import { withCompetitionRanks } from '@/lib/ranking'
 import { getGameState, subscribeStore } from '@/lib/store'
 import { X } from 'lucide-react'
 
@@ -28,6 +29,7 @@ interface OrderedHistoryEntry extends HistoryEntry {
 interface MiniGameRank {
   rank: number | null
   baan: number | null
+  score?: number | null
   reward: number | null
 }
 
@@ -60,17 +62,35 @@ const fetchSheetRows = async (query: string) => {
 const fetchMiniGameRanking = async (wave: number): Promise<MiniGameRank[]> => {
   const query = `${getWaveSheetQuery(wave)}&range=${encodeURIComponent('B20:D31')}`
   const rows = await fetchSheetRows(query)
-  return Array.from({ length: 12 }, (_, i) => {
+  const parsed = Array.from({ length: 12 }, (_, i) => {
     const baanRaw = rows?.[i]?.c?.[0]?.v
+    const scoreRaw = rows?.[i]?.c?.[1]?.v
     const rewardRaw = rows?.[i]?.c?.[2]?.v
     const baan = parseInt(String(baanRaw ?? ''))
+    const score = parseFloat(String(scoreRaw ?? ''))
     const reward = parseFloat(String(rewardRaw ?? ''))
     return {
-      rank: i + 1,
       baan: !isNaN(baan) && baan >= 1 && baan <= 12 ? baan : null,
+      score: Number.isFinite(score) ? score : null,
       reward: Number.isFinite(reward) ? reward : null,
     }
   })
+  const rankedRows = parsed
+    .filter((row): row is { baan: number; score: number | null; reward: number | null } => row.baan !== null)
+    .map(row => ({
+      ...row,
+      scoreForRank: row.score ?? row.reward ?? Number.NEGATIVE_INFINITY,
+    }))
+    .sort((a, b) => b.scoreForRank - a.scoreForRank || a.baan - b.baan)
+
+  const ranked = withCompetitionRanks(rankedRows, row => row.scoreForRank)
+
+  return [
+    ...ranked.map(({ scoreForRank: _scoreForRank, ...row }) => row),
+    ...parsed
+      .filter(row => row.baan === null)
+      .map(row => ({ ...row, rank: null })),
+  ]
 }
 
 const fetchLadderRanking = async (wave: number): Promise<MiniGameRank[]> => {

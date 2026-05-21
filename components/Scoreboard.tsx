@@ -1,6 +1,7 @@
 'use client'
 import clsx from 'clsx'
 import { HOUSE_COLORS, HOUSE_NAMES, RANK_REWARDS } from '@/lib/constants'
+import { withCompetitionRanks } from '@/lib/ranking'
 
 interface ScoreEntry {
   baan:    number
@@ -22,7 +23,10 @@ const RANK_ICONS = ['🥇','🥈','🥉']
 export default function Scoreboard({
   entries, title, wave, showRewards, compact, highlight,
 }: ScoreboardProps) {
-  const sorted = [...entries].sort((a, b) => b.score - a.score)
+  const sorted = withCompetitionRanks(
+    [...entries].sort((a, b) => b.score - a.score),
+    entry => entry.score,
+  )
   const max    = sorted[0]?.score || 1
 
   return (
@@ -39,8 +43,8 @@ export default function Scoreboard({
 
       {/* Entries */}
       <div className="space-y-1.5">
-        {sorted.map((entry, idx) => {
-          const rank      = idx + 1
+        {sorted.map((entry) => {
+          const rank      = entry.rank
           const color     = HOUSE_COLORS[entry.baan]
           const isTop3    = rank <= 3
           const isHighlit = highlight === entry.baan
